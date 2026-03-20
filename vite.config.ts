@@ -5,6 +5,8 @@ import monacoEditorPlugin from "vite-plugin-monaco-editor"
 import { resolve } from "path"
 
 const host = process.env.TAURI_DEV_HOST
+const devHost = host || "127.0.0.1"
+const aimdPackagesRoot = resolve(__dirname, "../aimd/packages")
 
 export default defineConfig(async () => ({
   plugins: [
@@ -15,19 +17,25 @@ export default defineConfig(async () => ({
     }),
   ],
   resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-      "@airalogy/aimd-editor/vue": resolve(__dirname, "../packages/aimd-editor/src/vue/index.ts"),
-      "@airalogy/aimd-editor/embedded": resolve(__dirname, "../packages/aimd-editor/src/embedded.ts"),
-      "@airalogy/aimd-editor/wysiwyg": resolve(__dirname, "../packages/aimd-editor/src/wysiwyg.ts"),
-      "@airalogy/aimd-editor/monaco": resolve(__dirname, "../packages/aimd-editor/src/monaco.ts"),
-    },
+    alias: [
+      { find: /^@\//, replacement: `${resolve(__dirname, "src")}/` },
+      { find: /^@airalogy\/aimd-core\/types$/, replacement: resolve(aimdPackagesRoot, "aimd-core/src/types/index.ts") },
+      { find: /^@airalogy\/aimd-core$/, replacement: resolve(aimdPackagesRoot, "aimd-core/src/index.ts") },
+      { find: /^@airalogy\/aimd-editor\/vue$/, replacement: resolve(aimdPackagesRoot, "aimd-editor/src/vue/index.ts") },
+      { find: /^@airalogy\/aimd-editor\/embedded$/, replacement: resolve(aimdPackagesRoot, "aimd-editor/src/embedded.ts") },
+      { find: /^@airalogy\/aimd-editor\/wysiwyg$/, replacement: resolve(aimdPackagesRoot, "aimd-editor/src/wysiwyg.ts") },
+      { find: /^@airalogy\/aimd-editor\/monaco$/, replacement: resolve(aimdPackagesRoot, "aimd-editor/src/monaco.ts") },
+      { find: /^@airalogy\/aimd-editor$/, replacement: resolve(aimdPackagesRoot, "aimd-editor/src/index.ts") },
+      { find: /^@airalogy\/aimd-renderer$/, replacement: resolve(aimdPackagesRoot, "aimd-renderer/src/index.ts") },
+      { find: /^@airalogy\/aimd-recorder\/styles$/, replacement: resolve(aimdPackagesRoot, "aimd-recorder/src/styles/aimd.css") },
+      { find: /^@airalogy\/aimd-recorder$/, replacement: resolve(aimdPackagesRoot, "aimd-recorder/src/index.ts") },
+    ],
   },
   clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    host: devHost,
     hmr: host
       ? {
           protocol: "ws",

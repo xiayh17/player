@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue"
+import { storeToRefs } from "pinia"
 import { useRouter, useRoute } from "vue-router"
 import { useI18n } from "vue-i18n"
 import { NButton, NSpace, NSelect, NEmpty, NSpin, NInput, NModal, useMessage } from "naive-ui"
 import { AimdEditor, type AimdVarTypePresetOption } from "@airalogy/aimd-editor"
 import { useWorkspaceStore } from "@/stores/workspace"
 import { useEditorStore } from "@/stores/editor"
-import { loadEditorVarTypePresets } from "@/features/var-cards/runtime/createEditorVarTypePresets"
+import { createEditorVarTypePresets } from "@/features/var-cards/runtime/createEditorVarTypePresets"
+import { useVarCardStore } from "@/stores/varCards"
 import { invoke } from "@tauri-apps/api/core"
 
 const router = useRouter()
@@ -16,6 +18,8 @@ const message = useMessage()
 
 const workspaceStore = useWorkspaceStore()
 const editorStore = useEditorStore()
+const varCardStore = useVarCardStore()
+const { cards: varCards } = storeToRefs(varCardStore)
 
 type Status = "loading" | "no-protocol" | "no-files" | "ready"
 
@@ -27,7 +31,6 @@ const saving = ref(false)
 const showNewFileModal = ref(false)
 const newFileName = ref("")
 const creatingFile = ref(false)
-const varTypePresets = ref<AimdVarTypePresetOption[]>([])
 
 const protocolId = computed(() => route.query.id as string | undefined)
 
@@ -37,6 +40,9 @@ const protocol = computed(() =>
 
 const fileSelectOptions = computed(() =>
   files.value.map((f) => ({ label: f, value: f }))
+)
+const varTypePresets = computed<AimdVarTypePresetOption[]>(() =>
+  createEditorVarTypePresets(varCards.value),
 )
 
 async function load() {
@@ -68,10 +74,6 @@ async function load() {
     await openFile(files.value[0])
     status.value = "ready"
   }
-}
-
-async function loadVarCardPresets() {
-  varTypePresets.value = await loadEditorVarTypePresets()
 }
 
 async function openFile(filename: string) {
@@ -148,7 +150,7 @@ function openCardStudio() {
 }
 
 onMounted(async () => {
-  await Promise.all([load(), loadVarCardPresets()])
+  await Promise.all([load(), varCardStore.fetchCards()])
 })
 watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
 </script>

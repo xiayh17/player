@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from "vue"
-import type { Component } from "vue"
+import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { AimdRecorder, createEmptyProtocolRecordData } from "@airalogy/aimd-recorder"
-import "@airalogy/aimd-recorder/styles"
 import { NButton, NEmpty, NModal, NTag } from "naive-ui"
-import type { AimdProtocolRecordData } from "@airalogy/aimd-recorder"
 import type { VarCardGalleryCard } from "./VarCardGalleryItem.vue"
+import VarCardPreviewSurface from "./VarCardPreviewSurface.vue"
 
 const props = defineProps<{
   show: boolean
@@ -20,8 +17,6 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
-const previewRecord = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
-const sharedPreviewSurface = shallowRef<Component | null>(null)
 
 const recorderLocale = computed(() => (locale.value === "zh" ? "zh-CN" : "en-US"))
 const title = computed(() => props.card?.title ?? t("varCards.preview.emptyTitle"))
@@ -29,15 +24,6 @@ const isBuiltin = computed(() => props.card?.namespace === "builtin")
 const actionLabel = computed(() =>
   isBuiltin.value ? t("varCards.actions.clone") : t("common.edit")
 )
-
-onMounted(async () => {
-  const modules = import.meta.glob("./VarCardPreviewSurface.vue")
-  const loader = modules["./VarCardPreviewSurface.vue"]
-  if (!loader) return
-
-  const mod = await loader() as { default?: Component }
-  sharedPreviewSurface.value = (mod.default as Component | undefined) ?? null
-})
 
 function closeDialog() {
   emit("update:show", false)
@@ -87,21 +73,12 @@ function handlePrimaryAction() {
       </div>
 
       <div class="preview-dialog__canvas">
-        <component
-          :is="sharedPreviewSurface"
-          v-if="sharedPreviewSurface"
-          :card="card"
+        <VarCardPreviewSurface
+          v-if="card"
           :manifest="card"
-          :demo-value="card.demoValue"
-        />
-        <AimdRecorder
-          v-else
-          v-model="previewRecord"
-          :content="card.previewContent"
           :readonly="false"
           :locale="recorderLocale"
           current-user-name="Dr. Lin"
-          class="preview-dialog__recorder"
         />
       </div>
     </div>

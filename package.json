@@ -13,10 +13,10 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@airalogy/aimd-core": "workspace:*",
-    "@airalogy/aimd-editor": "workspace:*",
-    "@airalogy/aimd-recorder": "workspace:*",
-    "@airalogy/aimd-renderer": "workspace:*",
+    "@airalogy/aimd-core": "link:../aimd/packages/aimd-core",
+    "@airalogy/aimd-editor": "link:../aimd/packages/aimd-editor",
+    "@airalogy/aimd-recorder": "link:../aimd/packages/aimd-recorder",
+    "@airalogy/aimd-renderer": "link:../aimd/packages/aimd-renderer",
     "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-fs": "^2.2.0",

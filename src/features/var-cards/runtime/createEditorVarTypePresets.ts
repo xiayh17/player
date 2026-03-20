@@ -1,5 +1,6 @@
-import { unref } from "vue"
 import type { AimdVarTypePresetOption } from "@airalogy/aimd-editor"
+import { storeToRefs } from "pinia"
+import { useVarCardStore } from "@/stores/varCards"
 
 export interface EditorVarCardPresetSource {
   id: string
@@ -61,49 +62,12 @@ export function createEditorVarTypePresets(
     })
 }
 
-function readCardsFromStore(store: Record<string, unknown>): EditorVarCardPresetSource[] {
-  const candidates = [
-    unref(store.cards),
-    unref(store.allCards),
-    unref(store.items),
-  ]
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate as EditorVarCardPresetSource[]
-    }
-  }
-
-  return []
-}
-
 export async function loadEditorVarTypePresets(): Promise<AimdVarTypePresetOption[]> {
-  const storeLoaders = import.meta.glob("../../../stores/varCards.ts")
-  const storeLoader = storeLoaders["../../../stores/varCards.ts"]
-
-  if (!storeLoader) {
-    return []
-  }
-
   try {
-    const storeModule = await storeLoader() as {
-      useVarCardStore?: () => Record<string, unknown>
-    }
-    const useVarCardStore = storeModule.useVarCardStore
-
-    if (typeof useVarCardStore !== "function") {
-      return []
-    }
-
     const store = useVarCardStore()
-
-    if (typeof store.fetchCards === "function") {
-      await store.fetchCards()
-    } else if (typeof store.loadCards === "function") {
-      await store.loadCards()
-    }
-
-    return createEditorVarTypePresets(readCardsFromStore(store))
+    const { cards } = storeToRefs(store)
+    await store.fetchCards()
+    return createEditorVarTypePresets(cards.value as EditorVarCardPresetSource[])
   } catch {
     return []
   }

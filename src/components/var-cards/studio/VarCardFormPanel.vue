@@ -57,6 +57,18 @@ const tagSummary = computed(() =>
     .filter(Boolean),
 )
 
+const demoValuePlaceholder = computed(() => {
+  if (props.draft.layoutKind === "asset") {
+    return '{"src":"https://example.com/sample.mov","name":"sample.mov","mimeType":"video/quicktime"}'
+  }
+
+  if (props.draft.layoutKind === "service") {
+    return '{"status":"idle","message":"Ready to test"}'
+  }
+
+  return "Used by the live preview panel. JSON is supported."
+})
+
 function updateField(key: string, value: unknown) {
   emit("update:draft", {
     ...props.draft,
@@ -287,11 +299,7 @@ onMounted(async () => {
           :value="draft.demoValueText"
           :disabled="readOnly"
           :autosize="{ minRows: 3, maxRows: 8 }"
-          :placeholder="draft.layoutKind === 'asset'
-            ? '{\"src\":\"https://example.com/sample.mov\",\"name\":\"sample.mov\",\"mimeType\":\"video/quicktime\"}'
-            : draft.layoutKind === 'service'
-              ? '{\"status\":\"idle\",\"message\":\"Ready to test\"}'
-              : 'Used by the live preview panel. JSON is supported.'"
+          :placeholder="demoValuePlaceholder"
           @update:value="updateField('demoValueText', $event)"
         />
       </NFormItem>

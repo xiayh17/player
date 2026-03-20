@@ -18,7 +18,7 @@ pnpm tauri build
 ## Project Structure
 
 ```
-aimdlab/
+player/
 ├── src/                    # Vue 3 frontend
 │   ├── components/         # Vue components
 │   ├── pages/             # Page components

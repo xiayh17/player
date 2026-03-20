@@ -1,13 +1,19 @@
 import { spawn } from "node:child_process"
+import path from "node:path"
 
 const args = process.argv.slice(2)
 const isMacBuild = process.platform === "darwin" && args[0] === "build"
 const maxAttempts = isMacBuild ? 2 : 1
+const cargoTargetDir = process.env.CARGO_TARGET_DIR ?? path.resolve(process.cwd(), "target-player")
 
 function runTauri(attempt) {
   return new Promise((resolve) => {
     const child = spawn("pnpm", ["exec", "tauri", ...args], {
       cwd: process.cwd(),
+      env: {
+        ...process.env,
+        CARGO_TARGET_DIR: cargoTargetDir,
+      },
       shell: process.platform === "win32",
       stdio: isMacBuild ? ["inherit", "pipe", "pipe"] : "inherit",
     })
