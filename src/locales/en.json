@@ -51,7 +51,7 @@
   "varCards": {
     "eyebrow": "Card Market",
     "title": "Var Card Market",
-    "subtitle": "Browse reusable recorder cards, inspect live previews, and branch built-ins into your own card catalog.",
+    "subtitle": "Browse reusable recorder card summaries, open full previews in a modal, and branch built-ins into your own card catalog.",
     "searchPlaceholder": "Search cards, tags, or record types...",
     "empty": "No cards match this filter yet",
     "filters": {
@@ -76,11 +76,45 @@
     },
     "heroPanel": {
       "label": "Shared runtime",
-      "title": "Preview what Record will render",
-      "description": "The market is designed around live recorder previews so gallery thumbnails, detail previews, and future runtime rendering stay visually aligned.",
-      "tagPreview": "Live preview",
+      "title": "Scan the summary card, then open the full preview",
+      "description": "The market now uses consistent summary cards in the grid so larger recorder layouts do not break the gallery. Open the modal when you need the real runtime preview.",
+      "tagPreview": "Modal preview",
       "tagClone": "Clone built-ins",
       "tagRuntime": "Recorder-backed"
+    },
+    "summary": {
+      "field": "Field summary",
+      "kind": "Type",
+      "layout": "Layout",
+      "density": "Density",
+      "required": "Required",
+      "optional": "Optional",
+      "liveValue": "Live value",
+      "staticValue": "Static value",
+      "manualEntry": "Manual entry",
+      "derivedValue": "Derived value",
+      "kindValues": {
+        "text": "Text",
+        "textarea": "Long text",
+        "number": "Number",
+        "boolean": "Boolean",
+        "select": "Select",
+        "markdown": "Markdown",
+        "code": "Code",
+        "dna": "DNA",
+        "datetime": "Date time",
+        "asset": "Asset",
+        "service": "Service"
+      },
+      "layoutValues": {
+        "inline": "Inline",
+        "stacked": "Stacked",
+        "panel": "Panel"
+      },
+      "densityValues": {
+        "compact": "Compact",
+        "comfortable": "Comfortable"
+      }
     },
     "preview": {
       "emptyTitle": "Var Card Preview",

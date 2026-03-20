@@ -1,3 +1,5 @@
+import type { AimdVarInputKind } from "@airalogy/aimd-recorder"
+
 export type VarCardNamespace = "builtin" | "user"
 
 export type VarCardKey = `${VarCardNamespace}:${string}`
@@ -7,16 +9,61 @@ export interface VarCardOption {
   value: unknown
 }
 
+export type VarCardAssetPreviewMode =
+  | "auto"
+  | "image"
+  | "video"
+  | "audio"
+  | "document"
+  | "download"
+  | "model3d"
+
+export type VarCardServiceType = "ssh"
+export type VarCardServiceStatus =
+  | "idle"
+  | "testing"
+  | "connected"
+  | "auth_failed"
+  | "host_unreachable"
+  | "unknown_host"
+  | "config_error"
+  | "error"
+
+export interface VarCardAssetValue {
+  src: string | null
+  name: string | null
+  mimeType: string | null
+  size: number | null
+  lastModified: number | null
+}
+
+export interface VarCardServiceValue {
+  serviceType: VarCardServiceType
+  profileId: string | null
+  host: string | null
+  username: string | null
+  port: number | null
+  remotePath: string | null
+  status: VarCardServiceStatus
+  checkedAt: string | null
+  message: string | null
+}
+
 export interface VarCardSchema {
   kind:
     | "text"
     | "textarea"
     | "number"
     | "boolean"
+    | "select"
     | "markdown"
     | "code"
     | "dna"
     | "datetime"
+    | "asset"
+    | "service"
+  baseType: string | null
+  inputKind: AimdVarInputKind | null
   label: string | null
   placeholder: string | null
   defaultValue: unknown
@@ -28,6 +75,14 @@ export interface VarCardSchema {
   max: number | null
   step: number | null
   language: string | null
+  accept: string | null
+  previewMode: VarCardAssetPreviewMode | null
+  serviceType: VarCardServiceType | null
+  serviceProfileId: string | null
+  serviceHost: string | null
+  servicePort: number | null
+  serviceUsername: string | null
+  serviceRemotePath: string | null
   options: VarCardOption[]
 }
 
@@ -47,6 +102,10 @@ export interface VarCardBehavior {
   allowManualInput: boolean
   allowCopy: boolean
   liveValue: boolean
+  required?: boolean
+  validationHint?: string | null
+  emptyState?: string | null
+  helpText?: string | null
 }
 
 export interface VarCardManifest {

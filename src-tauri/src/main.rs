@@ -32,6 +32,8 @@ pub fn run() {
             commands::var_cards::clone_var_card,
             commands::var_cards::save_var_card,
             commands::var_cards::delete_var_card,
+            commands::service::list_ssh_profiles,
+            commands::service::test_ssh_connection,
         ])
         .setup(|_app| {
             log::info!("Airalogy Player setup complete");

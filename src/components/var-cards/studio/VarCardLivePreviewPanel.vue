@@ -1,17 +1,13 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from "vue"
+import { computed } from "vue"
 import { NCard, NCode, NEmpty, NTag } from "naive-ui"
+import VarCardPreviewSurface from "@/components/var-cards/VarCardPreviewSurface.vue"
+import type { VarCardManifest } from "@/features/var-cards/types"
 
 const props = defineProps<{
   draft: Record<string, any>
   readOnly: boolean
 }>()
-
-const previewSurfaceLoaders = import.meta.glob("../VarCardPreviewSurface.vue")
-const previewSurfaceLoader = previewSurfaceLoaders["../VarCardPreviewSurface.vue"]
-const PreviewSurface = previewSurfaceLoader
-  ? defineAsyncComponent(previewSurfaceLoader as Parameters<typeof defineAsyncComponent>[0])
-  : null
 
 const options = computed(() =>
   String(props.draft.enumOptionsText || "")
@@ -43,6 +39,78 @@ const formattedDemoValue = computed(() =>
     ? parsedDemoValue.value
     : JSON.stringify(parsedDemoValue.value, null, 2),
 )
+
+const previewManifest = computed<VarCardManifest>(() => ({
+  id: String(props.draft.id || "studio-preview"),
+  namespace: props.readOnly ? "builtin" : "user",
+  version: String(props.draft.version || "1.0.0"),
+  title: String(props.draft.title || "Untitled card"),
+  description: String(props.draft.description || ""),
+  icon: null,
+  tags: String(props.draft.tagsText || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean),
+  readonly: props.readOnly,
+  baseCardId: null,
+  recordType: String(props.draft.recordType || "card:user/studio-preview"),
+  demoValue: parsedDemoValue.value,
+  schema: {
+    kind: props.draft.layoutKind === "select" ? "select" : (props.draft.layoutKind || "text"),
+    baseType: null,
+    inputKind: null,
+    label: String(props.draft.fieldLabel || props.draft.title || "Preview"),
+    placeholder: String(props.draft.placeholder || ""),
+    defaultValue: "",
+    helperText: String(props.draft.helpText || ""),
+    unit: null,
+    format: null,
+    rows:
+      props.draft.layoutKind === "textarea"
+      || props.draft.layoutKind === "code"
+      || props.draft.layoutKind === "markdown"
+      ? 4
+      : null,
+    min: null,
+    max: null,
+    step: null,
+    language: props.draft.layoutKind === "code" ? "plaintext" : null,
+    accept: props.draft.layoutKind === "asset" ? String(props.draft.assetAccept || "") : null,
+    previewMode: props.draft.layoutKind === "asset" ? String(props.draft.assetPreviewMode || "auto") as VarCardManifest["schema"]["previewMode"] : null,
+    serviceType: props.draft.layoutKind === "service" ? String(props.draft.serviceType || "ssh") as VarCardManifest["schema"]["serviceType"] : null,
+    serviceProfileId: props.draft.layoutKind === "service" ? String(props.draft.serviceProfileId || "") : null,
+    serviceHost: props.draft.layoutKind === "service" ? String(props.draft.serviceHost || "") : null,
+    servicePort: props.draft.layoutKind === "service"
+      ? Number.isFinite(Number(props.draft.servicePort)) ? Number(props.draft.servicePort) : 22
+      : null,
+    serviceUsername: props.draft.layoutKind === "service" ? String(props.draft.serviceUsername || "") : null,
+    serviceRemotePath: props.draft.layoutKind === "service" ? String(props.draft.serviceRemotePath || "") : null,
+    options: options.value,
+  },
+  layout: {
+    variant:
+      props.draft.layoutKind === "textarea"
+      || props.draft.layoutKind === "code"
+      || props.draft.layoutKind === "markdown"
+      || props.draft.layoutKind === "dna"
+      || props.draft.layoutKind === "asset"
+      || props.draft.layoutKind === "service"
+        ? "panel"
+        : "inline",
+    density: "comfortable",
+    align: "stretch",
+  },
+  appearance: {
+    accentColor: null,
+    icon: null,
+    badge: null,
+  },
+  behavior: {
+    allowManualInput: !props.draft.readonlyBehavior,
+    allowCopy: true,
+    liveValue: false,
+  },
+}))
 </script>
 
 <template>
@@ -54,18 +122,28 @@ const formattedDemoValue = computed(() =>
         </NTag>
       </template>
 
-      <component
-        :is="PreviewSurface"
-        v-if="PreviewSurface"
-        :card="draft"
-        :value="parsedDemoValue"
+      <VarCardPreviewSurface
+        :manifest="previewManifest"
+        :readonly="!!draft.readonlyBehavior"
       />
 
-      <div v-else class="preview-surface">
+      <div class="preview-surface">
         <label class="preview-label">{{ draft.fieldLabel || draft.title || "Untitled card" }}</label>
 
         <div v-if="draft.layoutKind === 'boolean'" class="preview-toggle">
           <span>{{ parsedDemoValue ? "Enabled" : "Disabled" }}</span>
+        </div>
+
+        <div v-else-if="draft.layoutKind === 'asset'" class="preview-asset">
+          <strong>{{ parsedDemoValue?.name || "No asset configured" }}</strong>
+          <span>{{ draft.assetPreviewMode || "auto" }}</span>
+          <code>{{ draft.assetAccept || "any file" }}</code>
+        </div>
+
+        <div v-else-if="draft.layoutKind === 'service'" class="preview-asset">
+          <strong>{{ draft.serviceProfileId || draft.serviceHost || "SSH service" }}</strong>
+          <span>{{ draft.serviceUsername || "user" }}@{{ draft.serviceHost || "host" }}:{{ draft.servicePort || "22" }}</span>
+          <code>{{ draft.serviceRemotePath || "/" }}</code>
         </div>
 
         <select v-else-if="draft.layoutKind === 'select'" class="preview-input" disabled>
@@ -151,6 +229,23 @@ const formattedDemoValue = computed(() =>
   background: rgba(14, 165, 233, 0.12);
   color: #0369a1;
   font-weight: 600;
+}
+
+.preview-asset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 88px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(14, 165, 233, 0.08);
+  color: #0f172a;
+}
+
+.preview-asset span,
+.preview-asset code {
+  font-size: 12px;
+  color: #475569;
 }
 
 .preview-help,

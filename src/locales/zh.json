@@ -51,7 +51,7 @@
   "varCards": {
     "eyebrow": "卡片市场",
     "title": "变量卡片市场",
-    "subtitle": "浏览可复用的记录卡片、查看实时预览，并把内置卡片克隆到你自己的卡片目录中。",
+    "subtitle": "浏览可复用的记录卡片摘要，在弹窗中查看完整预览，并把内置卡片克隆到你自己的卡片目录中。",
     "searchPlaceholder": "搜索卡片、标签或记录类型...",
     "empty": "当前筛选下暂无卡片",
     "filters": {
@@ -76,11 +76,45 @@
     },
     "heroPanel": {
       "label": "共享运行时",
-      "title": "直接预览 Record 的真实渲染效果",
-      "description": "市场页面围绕实时 recorder 预览构建，让画廊缩略图、详情预览和后续运行时渲染保持一致。",
-      "tagPreview": "实时预览",
+      "title": "先看简介卡，再打开完整预览",
+      "description": "市场页先用统一尺寸的信息卡介绍每张 var 卡，避免不同布局把画廊撑乱；需要时再进入弹窗查看真实 recorder 预览。",
+      "tagPreview": "弹窗预览",
       "tagClone": "克隆内置卡片",
       "tagRuntime": "基于 Recorder"
+    },
+    "summary": {
+      "field": "字段摘要",
+      "kind": "类型",
+      "layout": "布局",
+      "density": "密度",
+      "required": "必填",
+      "optional": "可选",
+      "liveValue": "实时值",
+      "staticValue": "静态值",
+      "manualEntry": "可手动输入",
+      "derivedValue": "派生值",
+      "kindValues": {
+        "text": "文本",
+        "textarea": "长文本",
+        "number": "数字",
+        "boolean": "布尔",
+        "select": "选择",
+        "markdown": "Markdown",
+        "code": "代码",
+        "dna": "DNA",
+        "datetime": "日期时间",
+        "asset": "资产文件",
+        "service": "服务连接"
+      },
+      "layoutValues": {
+        "inline": "行内",
+        "stacked": "堆叠",
+        "panel": "面板"
+      },
+      "densityValues": {
+        "compact": "紧凑",
+        "comfortable": "舒展"
+      }
     },
     "preview": {
       "emptyTitle": "变量卡片预览",

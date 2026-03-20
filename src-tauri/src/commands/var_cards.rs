@@ -22,6 +22,8 @@ pub struct VarCardOption {
 #[serde(rename_all = "camelCase")]
 pub struct VarCardSchema {
     pub kind: String,
+    pub base_type: Option<String>,
+    pub input_kind: Option<String>,
     pub label: Option<String>,
     pub placeholder: Option<String>,
     pub default_value: Option<Value>,
@@ -33,6 +35,14 @@ pub struct VarCardSchema {
     pub max: Option<f64>,
     pub step: Option<f64>,
     pub language: Option<String>,
+    pub accept: Option<String>,
+    pub preview_mode: Option<String>,
+    pub service_type: Option<String>,
+    pub service_profile_id: Option<String>,
+    pub service_host: Option<String>,
+    pub service_port: Option<u16>,
+    pub service_username: Option<String>,
+    pub service_remote_path: Option<String>,
     #[serde(default)]
     pub options: Vec<VarCardOption>,
 }
@@ -59,6 +69,10 @@ pub struct VarCardBehavior {
     pub allow_manual_input: bool,
     pub allow_copy: bool,
     pub live_value: bool,
+    pub required: Option<bool>,
+    pub validation_hint: Option<String>,
+    pub empty_state: Option<String>,
+    pub help_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

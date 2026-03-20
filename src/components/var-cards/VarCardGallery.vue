@@ -21,11 +21,7 @@ const emit = defineEmits<{
       @preview="emit('preview', $event)"
       @clone="emit('clone', $event)"
       @edit="emit('edit', $event)"
-    >
-      <template #preview>
-        <slot name="preview" :card="card" />
-      </template>
-    </VarCardGalleryItem>
+    />
   </div>
 </template>
 

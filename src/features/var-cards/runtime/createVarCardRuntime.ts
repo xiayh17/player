@@ -2,7 +2,6 @@ import { h } from "vue"
 import type { AimdTypePlugin, AimdTypePluginRenderContext, AimdVarInputKind, AimdProtocolRecordData } from "@airalogy/aimd-recorder"
 import {
   AimdDnaSequenceField,
-  AimdMarkdownField,
   createEmptyProtocolRecordData,
   formatDateForInput,
   formatDateTimeWithTimezone,
@@ -13,10 +12,12 @@ import {
   toBooleanValue,
 } from "@airalogy/aimd-recorder"
 import type { AimdVarNode } from "@airalogy/aimd-core/types"
-import AimdCodeField from "@airalogy/aimd-recorder/components/AimdCodeField.vue"
+import VarCardAssetField from "@/components/var-cards/VarCardAssetField.vue"
+import VarCardServiceField from "@/components/var-cards/VarCardServiceField.vue"
 import VarCardShell from "@/components/var-cards/VarCardShell.vue"
 import type { CompiledVarCardManifest } from "./compileCardManifest"
-import { compileCardManifest, type VarCardManifest } from "./compileCardManifest"
+import { compileCardManifest } from "./compileCardManifest"
+import type { VarCardAssetValue, VarCardManifest, VarCardServiceValue } from "../types"
 
 const PREVIEW_FIELD_ID = "var_card_preview"
 
@@ -78,8 +79,35 @@ function renderNativeFieldBody(
   runtime: VarCardRuntime,
   context: AimdTypePluginRenderContext,
 ): any {
+  if (runtime.manifest.schema.kind === "asset") {
+    return h(VarCardAssetField, {
+      modelValue: context.value,
+      disabled: context.disabled,
+      placeholder: context.placeholder,
+      accept: runtime.manifest.schema.accept ?? undefined,
+      previewMode: runtime.manifest.schema.previewMode ?? "auto",
+      "onUpdate:modelValue": (nextValue: VarCardAssetValue | null) => context.emitChange(nextValue),
+      onBlur: context.emitBlur,
+    })
+  }
+
+  if (runtime.manifest.schema.kind === "service" && runtime.manifest.schema.serviceType === "ssh") {
+    return h(VarCardServiceField, {
+      modelValue: context.value,
+      disabled: context.disabled,
+      serviceType: runtime.manifest.schema.serviceType,
+      serviceProfileId: runtime.manifest.schema.serviceProfileId,
+      serviceHost: runtime.manifest.schema.serviceHost,
+      servicePort: runtime.manifest.schema.servicePort,
+      serviceUsername: runtime.manifest.schema.serviceUsername,
+      serviceRemotePath: runtime.manifest.schema.serviceRemotePath,
+      "onUpdate:modelValue": (nextValue: VarCardServiceValue) => context.emitChange(nextValue),
+      onBlur: context.emitBlur,
+    })
+  }
+
   const inputKind = runtime.compiled.inputKind
-  const disabled = context.disabled
+  const disabled = context.disabled || !runtime.manifest.behavior.allowManualInput
   const placeholder = context.placeholder ?? runtime.compiled.placeholder
 
   if (runtime.compiled.enumOptions.length > 0) {
@@ -94,18 +122,6 @@ function renderNativeFieldBody(
     }, runtime.compiled.enumOptions.map(option =>
       h("option", { key: String(option.value), value: option.value as string | number | undefined }, option.label),
     ))
-  }
-
-  if (runtime.compiled.normalizedBaseType === "airalogymarkdown") {
-    return h(AimdMarkdownField, {
-      varId: context.node.id,
-      modelValue: context.value,
-      disabled,
-      locale: context.locale,
-      messages: context.messages,
-      "onUpdate:modelValue": (nextValue: string) => context.emitChange(nextValue),
-      onBlur: context.emitBlur,
-    })
   }
 
   if (inputKind === "dna" || runtime.compiled.normalizedBaseType === "dnasequence") {
@@ -150,12 +166,18 @@ function renderNativeFieldBody(
   }
 
   if (inputKind === "code") {
-    return h(AimdCodeField, {
-      modelValue: typeof context.displayValue === "number" ? String(context.displayValue) : context.displayValue,
-      language: runtime.compiled.codeLanguage ?? "plaintext",
+    return h("textarea", {
+      class: "var-card-shell__textarea var-card-shell__textarea--code",
       disabled,
-      "onUpdate:modelValue": (nextValue: string) => context.emitChange(nextValue),
+      placeholder,
+      rows: Math.max(runtime.manifest.schema.rows ?? 6, 4),
+      value: typeof context.displayValue === "number" ? String(context.displayValue) : context.displayValue,
+      onInput: (event: Event) => {
+        context.emitChange((event.target as HTMLTextAreaElement).value)
+      },
       onBlur: context.emitBlur,
+      "data-code-language": runtime.compiled.codeLanguage ?? "plaintext",
+      spellcheck: false,
     })
   }
 
@@ -230,6 +252,10 @@ function getCardInitialValue(runtime: VarCardRuntime, context: Parameters<NonNul
     return false
   }
 
+  if (runtime.manifest.schema.defaultValue !== null && typeof runtime.manifest.schema.defaultValue !== "undefined") {
+    return runtime.manifest.schema.defaultValue
+  }
+
   if (runtime.compiled.inputKind === "dna") {
     return normalizeDnaSequenceValue(undefined)
   }
@@ -254,6 +280,53 @@ function normalizeCardValue(runtime: VarCardRuntime, context: Parameters<NonNull
 }
 
 function getCardDisplayValue(runtime: VarCardRuntime, context: Parameters<NonNullable<AimdTypePlugin["getDisplayValue"]>>[0]): string | number {
+  if (runtime.manifest.schema.kind === "asset") {
+    const value = context.value
+
+    if (typeof value === "string") {
+      return value
+    }
+
+    if (value && typeof value === "object") {
+      const candidate = value as Record<string, unknown>
+      const name = candidate.name ?? candidate.fileName
+      const src = candidate.src ?? candidate.url ?? candidate.path
+
+      if (typeof name === "string" && name.trim()) {
+        return name.trim()
+      }
+
+      if (typeof src === "string" && src.trim()) {
+        return src.trim()
+      }
+    }
+
+    return ""
+  }
+
+  if (runtime.manifest.schema.kind === "service") {
+    const value = context.value
+    if (value && typeof value === "object") {
+      const candidate = value as Record<string, unknown>
+      const host = candidate.host
+      const message = candidate.message
+      const status = candidate.status
+
+      if (typeof host === "string" && host.trim()) {
+        return typeof status === "string" && status.trim()
+          ? `${host.trim()} (${status.trim()})`
+          : host.trim()
+      }
+
+      if (typeof message === "string" && message.trim()) {
+        return message.trim()
+      }
+    }
+
+    const schema = runtime.manifest.schema
+    return schema.serviceHost || schema.serviceProfileId || runtime.manifest.title
+  }
+
   if (runtime.compiled.basePlugin?.getDisplayValue) {
     return runtime.compiled.basePlugin.getDisplayValue(context)
   }

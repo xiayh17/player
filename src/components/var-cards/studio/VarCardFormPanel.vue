@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, onMounted, ref } from "vue"
 import {
   NCard,
   NForm,
@@ -8,6 +8,7 @@ import {
   NSelect,
   NTag,
 } from "naive-ui"
+import { listSshProfiles, type SshProfile } from "@/features/services/api"
 
 const props = defineProps<{
   draft: Record<string, any>
@@ -24,8 +25,30 @@ const layoutOptions = [
   { label: "Number", value: "number" },
   { label: "Boolean", value: "boolean" },
   { label: "Select", value: "select" },
+  { label: "Markdown", value: "markdown" },
   { label: "Code", value: "code" },
+  { label: "DNA", value: "dna" },
+  { label: "Datetime", value: "datetime" },
+  { label: "Asset", value: "asset" },
+  { label: "Service", value: "service" },
 ]
+
+const assetPreviewModeOptions = [
+  { label: "Auto", value: "auto" },
+  { label: "Image", value: "image" },
+  { label: "Video", value: "video" },
+  { label: "Audio", value: "audio" },
+  { label: "Document", value: "document" },
+  { label: "Download", value: "download" },
+  { label: "3D Model", value: "model3d" },
+]
+
+const serviceTypeOptions = [
+  { label: "SSH", value: "ssh" },
+]
+const sshProfiles = ref<SshProfile[]>([])
+const sshProfileOptions = ref<Array<{ label: string; value: string }>>([])
+const loadingSshProfiles = ref(false)
 
 const tagSummary = computed(() =>
   String(props.draft.tagsText || "")
@@ -40,6 +63,36 @@ function updateField(key: string, value: unknown) {
     [key]: value,
   })
 }
+
+async function loadSshProfiles() {
+  loadingSshProfiles.value = true
+  try {
+    sshProfiles.value = await listSshProfiles()
+    sshProfileOptions.value = sshProfiles.value.map((profile) => ({
+      label: `${profile.id} (${profile.user || "user"}@${profile.hostname}:${profile.port})`,
+      value: profile.id,
+    }))
+  } finally {
+    loadingSshProfiles.value = false
+  }
+}
+
+function handleServiceProfileChange(value: string | null) {
+  const nextValue = value || ""
+  const profile = sshProfiles.value.find((item) => item.id === nextValue)
+
+  emit("update:draft", {
+    ...props.draft,
+    serviceProfileId: nextValue,
+    serviceHost: profile?.hostname || profile?.host || props.draft.serviceHost,
+    servicePort: profile ? String(profile.port) : props.draft.servicePort,
+    serviceUsername: profile?.user || props.draft.serviceUsername,
+  })
+}
+
+onMounted(async () => {
+  await loadSshProfiles()
+})
 </script>
 
 <template>
@@ -122,6 +175,92 @@ function updateField(key: string, value: unknown) {
         </NFormItem>
       </div>
 
+      <div v-if="draft.layoutKind === 'asset'" class="form-grid">
+        <NFormItem label="Accepted Files">
+          <NInput
+            :value="draft.assetAccept"
+            :disabled="readOnly"
+            placeholder=".mov,.mp4,video/*"
+            @update:value="updateField('assetAccept', $event)"
+          />
+        </NFormItem>
+
+        <NFormItem label="Preview Mode">
+          <NSelect
+            :value="draft.assetPreviewMode"
+            :disabled="readOnly"
+            :options="assetPreviewModeOptions"
+            @update:value="updateField('assetPreviewMode', $event)"
+          />
+        </NFormItem>
+      </div>
+
+      <template v-if="draft.layoutKind === 'service'">
+        <div class="form-grid">
+          <NFormItem label="Service Type">
+            <NSelect
+              :value="draft.serviceType"
+              :disabled="readOnly"
+              :options="serviceTypeOptions"
+              @update:value="updateField('serviceType', $event)"
+            />
+          </NFormItem>
+
+          <NFormItem label="SSH Profile">
+            <NSelect
+              :value="draft.serviceProfileId || null"
+              :disabled="readOnly"
+              :loading="loadingSshProfiles"
+              :options="sshProfileOptions"
+              clearable
+              filterable
+              placeholder="Host alias from ~/.ssh/config"
+              @update:value="handleServiceProfileChange"
+            />
+          </NFormItem>
+        </div>
+
+        <div class="form-grid">
+          <NFormItem label="Host">
+            <NInput
+              :value="draft.serviceHost"
+              :disabled="readOnly"
+              placeholder="compute-01.example.org"
+              @update:value="updateField('serviceHost', $event)"
+            />
+          </NFormItem>
+
+          <NFormItem label="Port">
+            <NInput
+              :value="draft.servicePort"
+              :disabled="readOnly"
+              placeholder="22"
+              @update:value="updateField('servicePort', $event)"
+            />
+          </NFormItem>
+        </div>
+
+        <div class="form-grid">
+          <NFormItem label="Username">
+            <NInput
+              :value="draft.serviceUsername"
+              :disabled="readOnly"
+              placeholder="ubuntu"
+              @update:value="updateField('serviceUsername', $event)"
+            />
+          </NFormItem>
+
+          <NFormItem label="Remote Path">
+            <NInput
+              :value="draft.serviceRemotePath"
+              :disabled="readOnly"
+              placeholder="/srv/data"
+              @update:value="updateField('serviceRemotePath', $event)"
+            />
+          </NFormItem>
+        </div>
+      </template>
+
       <NFormItem label="Help Text">
         <NInput
           :value="draft.helpText"
@@ -148,7 +287,11 @@ function updateField(key: string, value: unknown) {
           :value="draft.demoValueText"
           :disabled="readOnly"
           :autosize="{ minRows: 3, maxRows: 8 }"
-          placeholder="Used by the live preview panel. JSON is supported."
+          :placeholder="draft.layoutKind === 'asset'
+            ? '{\"src\":\"https://example.com/sample.mov\",\"name\":\"sample.mov\",\"mimeType\":\"video/quicktime\"}'
+            : draft.layoutKind === 'service'
+              ? '{\"status\":\"idle\",\"message\":\"Ready to test\"}'
+              : 'Used by the live preview panel. JSON is supported.'"
           @update:value="updateField('demoValueText', $event)"
         />
       </NFormItem>

@@ -5,40 +5,7 @@ import {
   normalizeVarTypeName,
   resolveAimdTypePlugin,
 } from "@airalogy/aimd-recorder"
-import { resolveAimdCodeEditorLanguage } from "@airalogy/aimd-recorder/code-types"
-
-export type VarCardNamespace = "builtin" | "user"
-
-export interface VarCardSelectOption {
-  label: string
-  value: unknown
-}
-
-export interface VarCardManifestSchema {
-  baseType?: string
-  inputKind?: AimdVarInputKind
-  placeholder?: string
-  codeLanguage?: string
-  enumOptions?: VarCardSelectOption[]
-}
-
-export interface VarCardManifestAppearance {
-  accentColor?: string
-}
-
-export interface VarCardManifest {
-  id: string
-  namespace: VarCardNamespace
-  version: string
-  title: string
-  description: string
-  tags: string[]
-  readonly: boolean
-  recordType: string
-  demoValue: unknown
-  schema?: VarCardManifestSchema
-  appearance?: VarCardManifestAppearance
-}
+import type { VarCardManifest, VarCardOption } from "../types"
 
 export interface CompiledVarCardManifest {
   manifest: VarCardManifest
@@ -47,17 +14,77 @@ export interface CompiledVarCardManifest {
   inputKind: AimdVarInputKind
   placeholder?: string
   codeLanguage?: string | null
-  enumOptions: VarCardSelectOption[]
+  enumOptions: VarCardOption[]
   accentColor?: string
   basePlugin?: AimdTypePlugin
 }
 
+function resolveBaseType(manifest: VarCardManifest): string {
+  const explicit = manifest.schema.baseType?.trim()
+  if (explicit) {
+    return explicit
+  }
+
+  switch (manifest.schema.kind) {
+    case "number":
+      return "float"
+    case "boolean":
+      return "bool"
+    case "asset":
+    case "service":
+      return "str"
+    case "markdown":
+      return "AiralogyMarkdown"
+    case "code":
+      return "CodeStr"
+    case "dna":
+      return "DNASequence"
+    case "datetime":
+      return manifest.behavior.liveValue ? "CurrentTime" : "datetime"
+    case "select":
+    case "text":
+    case "textarea":
+    default:
+      return "str"
+  }
+}
+
+function resolveInputKindOverride(manifest: VarCardManifest): AimdVarInputKind | undefined {
+  if (manifest.schema.inputKind) {
+    return manifest.schema.inputKind
+  }
+
+  switch (manifest.schema.kind) {
+    case "textarea":
+    case "markdown":
+      return "textarea"
+    case "number":
+      return "number"
+    case "boolean":
+      return "checkbox"
+    case "asset":
+    case "service":
+      return "text"
+    case "code":
+      return "code"
+    case "dna":
+      return "dna"
+    case "datetime":
+      return "datetime"
+    case "select":
+    case "text":
+    default:
+      return "text"
+  }
+}
+
 export function compileCardManifest(manifest: VarCardManifest): CompiledVarCardManifest {
-  const baseType = manifest.schema?.baseType ?? manifest.recordType
+  const baseType = resolveBaseType(manifest)
   const basePlugin = resolveAimdTypePlugin(baseType, BUILT_IN_AIMD_TYPE_PLUGINS)
-  const inputKind = manifest.schema?.inputKind ?? getVarInputKind(baseType, {
-    inputType: manifest.schema?.inputKind,
-    codeLanguage: manifest.schema?.codeLanguage,
+  const inputKindOverride = resolveInputKindOverride(manifest)
+  const inputKind = getVarInputKind(baseType, {
+    inputType: inputKindOverride,
+    codeLanguage: manifest.schema.language ?? undefined,
     typePlugin: basePlugin,
   })
 
@@ -66,13 +93,10 @@ export function compileCardManifest(manifest: VarCardManifest): CompiledVarCardM
     baseType,
     normalizedBaseType: normalizeVarTypeName(baseType),
     inputKind,
-    placeholder: manifest.schema?.placeholder,
-    codeLanguage: resolveAimdCodeEditorLanguage(baseType, {
-      inputType: manifest.schema?.inputKind,
-      codeLanguage: manifest.schema?.codeLanguage,
-    }),
-    enumOptions: manifest.schema?.enumOptions ?? [],
-    accentColor: manifest.appearance?.accentColor,
+    placeholder: manifest.schema.placeholder ?? undefined,
+    codeLanguage: manifest.schema.language ?? undefined,
+    enumOptions: manifest.schema.options ?? [],
+    accentColor: manifest.appearance.accentColor ?? undefined,
     basePlugin,
   }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, unref, watch } from "vue"
+import { computed, onMounted, ref, toRaw, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import {
@@ -14,25 +14,25 @@ import VarCardStudioLayout from "@/components/var-cards/studio/VarCardStudioLayo
 import VarCardFormPanel from "@/components/var-cards/studio/VarCardFormPanel.vue"
 import VarCardBehaviorPanel from "@/components/var-cards/studio/VarCardBehaviorPanel.vue"
 import VarCardLivePreviewPanel from "@/components/var-cards/studio/VarCardLivePreviewPanel.vue"
+import { useVarCardStore } from "@/stores/varCards"
+import type { VarCardManifest } from "@/features/var-cards/types"
 
 type StudioStatus = "loading" | "ready" | "missing-store" | "missing-card"
 
-type VarCardRecord = Record<string, any>
+type VarCardRecord = VarCardManifest
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const message = useMessage()
+const store = useVarCardStore()
 
 const status = ref<StudioStatus>("loading")
-const store = ref<Record<string, any> | null>(null)
 const cards = ref<VarCardRecord[]>([])
 const sourceManifest = ref<VarCardRecord | null>(null)
 const draft = ref(createEmptyDraft())
 const saving = ref(false)
 const cloning = ref(false)
-
-const storeLoaders = import.meta.glob("../stores/varCards.ts")
 
 const currentCardId = computed(() => {
   const value = route.query.id
@@ -70,6 +70,14 @@ function createEmptyDraft() {
     layoutKind: "text",
     fieldLabel: "",
     placeholder: "",
+    assetAccept: "",
+    assetPreviewMode: "auto",
+    serviceType: "ssh",
+    serviceProfileId: "",
+    serviceHost: "",
+    servicePort: "22",
+    serviceUsername: "",
+    serviceRemotePath: "",
     helpText: "",
     enumOptionsText: "",
     demoValueText: "",
@@ -116,17 +124,25 @@ function draftFromManifest(manifest: VarCardRecord) {
     recordType: String(manifest.recordType || ""),
     version: String(manifest.version || "1.0.0"),
     tagsText: Array.isArray(manifest.tags) ? manifest.tags.join(", ") : "",
-    layoutKind: String(manifest.layout?.kind || manifest.schema?.kind || "text"),
-    fieldLabel: String(manifest.schema?.label || manifest.layout?.label || manifest.title || ""),
-    placeholder: String(manifest.schema?.placeholder || manifest.layout?.placeholder || ""),
-    helpText: String(manifest.schema?.helpText || manifest.behavior?.helpText || ""),
+    layoutKind: String(manifest.schema?.kind || "text"),
+    fieldLabel: String(manifest.schema?.label || manifest.title || ""),
+    placeholder: String(manifest.schema?.placeholder || ""),
+    assetAccept: String(manifest.schema?.accept || ""),
+    assetPreviewMode: String(manifest.schema?.previewMode || "auto"),
+    serviceType: String(manifest.schema?.serviceType || "ssh"),
+    serviceProfileId: String(manifest.schema?.serviceProfileId || ""),
+    serviceHost: String(manifest.schema?.serviceHost || ""),
+    servicePort: String(manifest.schema?.servicePort ?? 22),
+    serviceUsername: String(manifest.schema?.serviceUsername || ""),
+    serviceRemotePath: String(manifest.schema?.serviceRemotePath || ""),
+    helpText: String(manifest.schema?.helperText || manifest.behavior?.helpText || ""),
     enumOptionsText: optionsTextFromManifest(manifest),
     demoValueText:
       typeof manifest.demoValue === "string"
         ? manifest.demoValue
         : JSON.stringify(manifest.demoValue ?? "", null, 2),
     required: Boolean(manifest.behavior?.required),
-    readonlyBehavior: Boolean(manifest.behavior?.readonly),
+    readonlyBehavior: !Boolean(manifest.behavior?.allowManualInput),
     validationHint: String(manifest.behavior?.validationHint || ""),
     emptyState: String(manifest.behavior?.emptyState || ""),
     readOnly: Boolean(manifest.readonly || manifest.namespace === "builtin"),
@@ -147,13 +163,69 @@ function parseOptions(text: string) {
     })
 }
 
+function cloneManifest(manifest: VarCardRecord): VarCardRecord {
+  return structuredClone(toRaw(manifest))
+}
+
 function buildManifestFromDraft(nextDraft: Record<string, any>, baseManifest: VarCardRecord | null) {
-  const manifest: VarCardRecord = structuredClone(baseManifest ?? {})
+  const manifest: VarCardRecord = structuredClone(baseManifest ?? {
+    id: "",
+    namespace: "user",
+    version: "1.0.0",
+    title: "",
+    description: "",
+    icon: null,
+    tags: [],
+    readonly: false,
+    baseCardId: null,
+    recordType: "",
+    demoValue: "",
+    schema: {
+      kind: "text",
+      baseType: null,
+      inputKind: null,
+      label: null,
+      placeholder: null,
+      defaultValue: "",
+      helperText: null,
+      unit: null,
+      format: null,
+      rows: null,
+      min: null,
+      max: null,
+      step: null,
+      language: null,
+      accept: null,
+      previewMode: null,
+      serviceType: null,
+      serviceProfileId: null,
+      serviceHost: null,
+      servicePort: null,
+      serviceUsername: null,
+      serviceRemotePath: null,
+      options: [],
+    },
+    layout: {
+      variant: "inline",
+      density: "comfortable",
+      align: "stretch",
+    },
+    appearance: {
+      accentColor: null,
+      icon: null,
+      badge: null,
+    },
+    behavior: {
+      allowManualInput: true,
+      allowCopy: true,
+      liveValue: false,
+    },
+  })
   const namespace = String(nextDraft.namespace || baseManifest?.namespace || "user")
   const isBuiltIn = namespace === "builtin"
 
   manifest.id = nextDraft.id || baseManifest?.id || ""
-  manifest.namespace = namespace
+  manifest.namespace = isBuiltIn ? "builtin" : "user"
   manifest.version = nextDraft.version || baseManifest?.version || "1.0.0"
   manifest.title = String(nextDraft.title || "").trim()
   manifest.description = String(nextDraft.description || "").trim()
@@ -166,25 +238,58 @@ function buildManifestFromDraft(nextDraft: Record<string, any>, baseManifest: Va
   manifest.demoValue = parseDemoValueText(String(nextDraft.demoValueText || ""))
 
   manifest.layout = {
-    ...(manifest.layout ?? {}),
-    kind: nextDraft.layoutKind || "text",
-    label: nextDraft.fieldLabel || manifest.title,
-    placeholder: nextDraft.placeholder || "",
+    variant:
+      nextDraft.layoutKind === "textarea"
+      || nextDraft.layoutKind === "code"
+      || nextDraft.layoutKind === "markdown"
+      || nextDraft.layoutKind === "dna"
+      || nextDraft.layoutKind === "asset"
+      || nextDraft.layoutKind === "service"
+        ? "panel"
+        : "inline",
+    density: manifest.layout?.density ?? "comfortable",
+    align: manifest.layout?.align ?? "stretch",
   }
 
   manifest.schema = {
     ...(manifest.schema ?? {}),
     kind: nextDraft.layoutKind || "text",
+    baseType: manifest.schema?.baseType ?? null,
+    inputKind: manifest.schema?.inputKind ?? null,
     label: nextDraft.fieldLabel || manifest.title,
     placeholder: nextDraft.placeholder || "",
-    helpText: nextDraft.helpText || "",
+    defaultValue: manifest.schema?.defaultValue ?? "",
+    helperText: nextDraft.helpText || "",
+    unit: manifest.schema?.unit ?? null,
+    format: manifest.schema?.format ?? null,
+    rows: nextDraft.layoutKind === "textarea" || nextDraft.layoutKind === "code" ? 4 : null,
+    min: manifest.schema?.min ?? null,
+    max: manifest.schema?.max ?? null,
+    step: manifest.schema?.step ?? null,
+    language: nextDraft.layoutKind === "code" ? (manifest.schema?.language ?? "plaintext") : null,
+    accept: nextDraft.layoutKind === "asset" ? String(nextDraft.assetAccept || "") : null,
+    previewMode: nextDraft.layoutKind === "asset"
+      ? (String(nextDraft.assetPreviewMode || "auto") as VarCardRecord["schema"]["previewMode"])
+      : null,
+    serviceType: nextDraft.layoutKind === "service"
+      ? (String(nextDraft.serviceType || "ssh") as VarCardRecord["schema"]["serviceType"])
+      : null,
+    serviceProfileId: nextDraft.layoutKind === "service" ? String(nextDraft.serviceProfileId || "") : null,
+    serviceHost: nextDraft.layoutKind === "service" ? String(nextDraft.serviceHost || "") : null,
+    servicePort: nextDraft.layoutKind === "service"
+      ? Number.isFinite(Number(nextDraft.servicePort)) ? Number(nextDraft.servicePort) : 22
+      : null,
+    serviceUsername: nextDraft.layoutKind === "service" ? String(nextDraft.serviceUsername || "") : null,
+    serviceRemotePath: nextDraft.layoutKind === "service" ? String(nextDraft.serviceRemotePath || "") : null,
     options: parseOptions(String(nextDraft.enumOptionsText || "")),
   }
 
   manifest.behavior = {
     ...(manifest.behavior ?? {}),
+    allowManualInput: !Boolean(nextDraft.readonlyBehavior),
+    allowCopy: manifest.behavior?.allowCopy ?? true,
+    liveValue: manifest.behavior?.liveValue ?? false,
     required: Boolean(nextDraft.required),
-    readonly: Boolean(nextDraft.readonlyBehavior),
     validationHint: String(nextDraft.validationHint || ""),
     emptyState: String(nextDraft.emptyState || ""),
     helpText: String(nextDraft.helpText || ""),
@@ -200,11 +305,6 @@ function updateDraft(value: Record<string, any>) {
   }
 }
 
-function readCards(storeValue: Record<string, any>): VarCardRecord[] {
-  const candidates = [unref(storeValue.cards), unref(storeValue.allCards), unref(storeValue.items)]
-  return candidates.find((candidate): candidate is VarCardRecord[] => Array.isArray(candidate)) ?? []
-}
-
 function findCardInList(cardList: VarCardRecord[]) {
   if (currentCardId.value) {
     return cardList.find((card) => card.id === currentCardId.value) ?? null
@@ -217,81 +317,51 @@ function findCardInList(cardList: VarCardRecord[]) {
   return null
 }
 
-async function ensureStore() {
-  const storeLoader = storeLoaders["../stores/varCards.ts"]
-  if (!storeLoader) {
-    status.value = "missing-store"
-    return null
-  }
-
-  const storeModule = await storeLoader() as {
-    useVarCardStore?: () => Record<string, any>
-  }
-
-  if (typeof storeModule.useVarCardStore !== "function") {
-    status.value = "missing-store"
-    return null
-  }
-
-  const resolvedStore = storeModule.useVarCardStore()
-  store.value = resolvedStore
-  return resolvedStore
-}
-
-async function loadCardsFromStore(resolvedStore: Record<string, any>) {
-  if (typeof resolvedStore.fetchCards === "function") {
-    await resolvedStore.fetchCards()
-  } else if (typeof resolvedStore.loadCards === "function") {
-    await resolvedStore.loadCards()
-  }
-
-  cards.value = readCards(resolvedStore)
+async function loadCardsFromStore() {
+  await store.fetchCards()
+  cards.value = store.cards
 }
 
 async function loadCurrentCard() {
   status.value = "loading"
-  const resolvedStore = await ensureStore()
+  try {
+    await loadCardsFromStore()
 
-  if (!resolvedStore) {
-    draft.value = createEmptyDraft()
-    return
-  }
+    if (!currentCardId.value && !currentRecordType.value) {
+      sourceManifest.value = null
+      draft.value = createEmptyDraft()
+      status.value = "ready"
+      return
+    }
 
-  await loadCardsFromStore(resolvedStore)
+    const card = currentCardId.value
+      ? await store.openCard(currentCardId.value)
+      : findCardInList(cards.value)
+    if (!card) {
+      status.value = "missing-card"
+      return
+    }
 
-  if (!currentCardId.value && !currentRecordType.value) {
-    sourceManifest.value = null
-    draft.value = createEmptyDraft()
+    sourceManifest.value = cloneManifest(card)
+    draft.value = draftFromManifest(card)
     status.value = "ready"
-    return
-  }
-
-  const card = findCardInList(cards.value)
-  if (!card) {
+  } catch (error) {
+    console.error("Failed to load var card studio state", error)
     status.value = "missing-card"
-    return
+    message.error(String(error))
   }
-
-  sourceManifest.value = structuredClone(card)
-  draft.value = draftFromManifest(card)
-  status.value = "ready"
 }
 
 async function saveCard() {
-  if (!store.value || typeof store.value.saveCard !== "function") {
-    message.error(t("varCards.studio.storeUnavailable"))
-    return
-  }
-
   saving.value = true
   try {
     const manifest = buildManifestFromDraft(draft.value, sourceManifest.value)
-    const result = await store.value.saveCard(manifest)
+    const result = await store.saveCard(manifest)
     const savedCard = result && typeof result === "object" ? result : manifest
 
-    sourceManifest.value = structuredClone(savedCard)
+    sourceManifest.value = cloneManifest(savedCard)
     draft.value = draftFromManifest(savedCard)
-    await loadCardsFromStore(store.value)
+    await loadCardsFromStore()
 
     if (savedCard.id) {
       await router.replace({
@@ -309,11 +379,6 @@ async function saveCard() {
 }
 
 async function cloneCard() {
-  if (!store.value || typeof store.value.cloneCard !== "function") {
-    message.error(t("varCards.studio.storeUnavailable"))
-    return
-  }
-
   const cardId = currentCardId.value || sourceManifest.value?.id
   if (!cardId) {
     message.error(t("varCards.studio.cloneUnavailable"))
@@ -322,13 +387,8 @@ async function cloneCard() {
 
   cloning.value = true
   try {
-    const result = await store.value.cloneCard(cardId)
-    const clonedCard =
-      typeof result === "object" && result
-        ? result
-        : readCards(store.value).find((card) => card.id === result)
-
-    await loadCardsFromStore(store.value)
+    const clonedCard = await store.cloneCard(cardId)
+    await loadCardsFromStore()
 
     if (!clonedCard?.id) {
       throw new Error(t("varCards.studio.cloneUnavailable"))

@@ -1,143 +1,26 @@
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, ref, unref, type PropType } from "vue"
+import { computed, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
-import { invoke } from "@tauri-apps/api/core"
 import { useMessage } from "naive-ui"
-import { AimdRecorder, createEmptyProtocolRecordData } from "@airalogy/aimd-recorder"
-import "@airalogy/aimd-recorder/styles"
 import { NButton, NButtonGroup, NEmpty, NInput, NSpin, NTag } from "naive-ui"
 import VarCardGallery from "@/components/var-cards/VarCardGallery.vue"
 import VarCardPreviewDialog from "@/components/var-cards/VarCardPreviewDialog.vue"
 import type { VarCardGalleryCard } from "@/components/var-cards/VarCardGalleryItem.vue"
-import type { AimdProtocolRecordData } from "@airalogy/aimd-recorder"
+import { useVarCardStore } from "@/stores/varCards"
 
 type NamespaceFilter = "all" | "builtin" | "user"
-
-interface VarCardStoreLike {
-  cards?: unknown
-  fetchCards?: () => Promise<unknown>
-  cloneCard?: (id: string) => Promise<unknown>
-}
-
-interface RemoteCardInput {
-  id?: string
-  title?: string
-  description?: string
-  icon?: string
-  tags?: string[]
-  namespace?: "builtin" | "user"
-  readonly?: boolean
-  demoValue?: unknown
-  recordType?: string
-  baseCardId?: string | null
-  previewContent?: string
-}
 
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
+const varCardStore = useVarCardStore()
 
 const loading = ref(true)
 const searchQuery = ref("")
 const namespaceFilter = ref<NamespaceFilter>("all")
 const selectedCard = ref<VarCardGalleryCard | null>(null)
 const previewOpen = ref(false)
-const localCards = ref<VarCardGalleryCard[]>([])
-const storeApi = ref<VarCardStoreLike | null>(null)
-
-const InlineCardPreview = defineComponent({
-  name: "InlineVarCardPreview",
-  props: {
-    card: {
-      type: Object as PropType<VarCardGalleryCard>,
-      required: true,
-    },
-  },
-  setup(props) {
-    const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
-    const { locale } = useI18n()
-    const recorderLocale = computed(() => (locale.value === "zh" ? "zh-CN" : "en-US"))
-
-    return () =>
-      h("div", { class: "market-inline-preview" }, [
-        h(AimdRecorder, {
-          modelValue: record.value,
-          "onUpdate:modelValue": (value: AimdProtocolRecordData) => {
-            record.value = value
-          },
-          content: props.card.previewContent,
-          readonly: false,
-          locale: recorderLocale.value,
-          currentUserName: "Dr. Lin",
-          class: "market-inline-preview__surface",
-        }),
-      ])
-  },
-})
-
-const builtInCards: VarCardGalleryCard[] = [
-  {
-    id: "builtin-current-time",
-    title: "Current Time",
-    description: "Timestamp fields for quick experiment logging and operator-friendly chronology.",
-    icon: "◷",
-    tags: ["time", "logging", "builtin"],
-    namespace: "builtin",
-    readonly: true,
-    demoValue: "2026-03-20T09:30:00Z",
-    recordType: "card:builtin/current-time",
-    previewContent: `# Current Time\n\nRecord time: {{var|recorded_at: CurrentTime}}`,
-  },
-  {
-    id: "builtin-user-name",
-    title: "User Name",
-    description: "Prefilled identity capture for operator attribution, sign-off, and traceability.",
-    icon: "◉",
-    tags: ["identity", "operator", "builtin"],
-    namespace: "builtin",
-    readonly: true,
-    demoValue: "Dr. Lin",
-    recordType: "card:builtin/user-name",
-    previewContent: `# User Name\n\nOperator: {{var|operator_name: UserName}}`,
-  },
-  {
-    id: "builtin-markdown",
-    title: "Lab Notes",
-    description: "Rich markdown notes with AIMD-aware editing for procedures, observations, and deviations.",
-    icon: "✎",
-    tags: ["notes", "markdown", "documentation"],
-    namespace: "builtin",
-    readonly: true,
-    demoValue: "# Observation\nCells reached 80% confluence.",
-    recordType: "card:builtin/airalogy-markdown",
-    previewContent: `# Lab Notes\n\nNotes: {{var|notes: AiralogyMarkdown}}`,
-  },
-  {
-    id: "builtin-dna-sequence",
-    title: "DNA Sequence",
-    description: "Sequence-aware capture for plasmids and constructs with structured metadata support.",
-    icon: "DNA",
-    tags: ["biology", "sequence", "construct"],
-    namespace: "builtin",
-    readonly: true,
-    demoValue: { name: "pAIMD-Reporter", sequence: "ATGCGTACCGTTAA" },
-    recordType: "card:builtin/dna-sequence",
-    previewContent: `# DNA Sequence\n\nPlasmid: {{var|plasmid: DNASequence}}`,
-  },
-  {
-    id: "builtin-python-code",
-    title: "Python Snippet",
-    description: "Code-native capture for analysis fragments, automation recipes, and reproducible transforms.",
-    icon: "</>",
-    tags: ["code", "python", "analysis"],
-    namespace: "builtin",
-    readonly: true,
-    demoValue: "print('hello AIMD')",
-    recordType: "card:builtin/python-snippet",
-    previewContent: `# Python Snippet\n\nAnalysis code: {{var|analysis_code: PyStr}}`,
-  },
-]
 
 const filterOptions = computed(() => [
   { label: t("varCards.filters.all"), value: "all" },
@@ -145,14 +28,7 @@ const filterOptions = computed(() => [
   { label: t("varCards.filters.user"), value: "user" },
 ])
 
-const cards = computed<VarCardGalleryCard[]>(() => {
-  const storeCards = storeApi.value?.cards
-  const source = Array.isArray(unref(storeCards))
-    ? normalizeCards(unref(storeCards) as RemoteCardInput[])
-    : localCards.value
-
-  return source
-})
+const cards = computed<VarCardGalleryCard[]>(() => varCardStore.cards)
 
 const filteredCards = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -184,74 +60,10 @@ async function loadCards() {
   loading.value = true
 
   try {
-    const compatibleStore = await loadCompatibleStore()
-    if (compatibleStore) {
-      storeApi.value = compatibleStore
-      await compatibleStore.fetchCards?.()
-      return
-    }
-
-    localCards.value = await loadFallbackCards()
+    await varCardStore.fetchCards()
   } finally {
     loading.value = false
   }
-}
-
-async function loadCompatibleStore(): Promise<VarCardStoreLike | null> {
-  const modules = import.meta.glob("../stores/*.ts")
-  const storeLoader = Object.entries(modules).find(([path]) => path.endsWith("/varCards.ts"))?.[1]
-
-  if (!storeLoader) return null
-
-  const mod = await storeLoader()
-  const useVarCardStore = (mod as { useVarCardStore?: () => VarCardStoreLike }).useVarCardStore
-  if (typeof useVarCardStore !== "function") return null
-
-  return useVarCardStore()
-}
-
-async function loadFallbackCards(): Promise<VarCardGalleryCard[]> {
-  try {
-    const remote = await invoke<RemoteCardInput[]>("list_var_cards")
-    return normalizeCards(remote)
-  } catch {
-    return builtInCards
-  }
-}
-
-function normalizeCards(rawCards: RemoteCardInput[]): VarCardGalleryCard[] {
-  const merged = rawCards.length > 0 ? rawCards : builtInCards
-
-  return merged.map((card, index) => ({
-    id: card.id ?? `var-card-${index}`,
-    title: card.title ?? "Untitled card",
-    description: card.description ?? "",
-    icon: card.icon ?? "◧",
-    tags: Array.isArray(card.tags) ? card.tags : [],
-    namespace: card.namespace === "user" ? "user" : "builtin",
-    readonly: Boolean(card.readonly ?? card.namespace !== "user"),
-    demoValue: card.demoValue,
-    recordType: card.recordType ?? `card:${card.namespace ?? "builtin"}/${card.id ?? index}`,
-    baseCardId: card.baseCardId ?? null,
-    previewContent: card.previewContent ?? createPreviewContent(card),
-  }))
-}
-
-function createPreviewContent(card: RemoteCardInput): string {
-  const fieldName = (card.id ?? "field").replace(/[^a-zA-Z0-9_]+/g, "_")
-  const typeName = resolvePreviewType(card.recordType)
-  return `# ${card.title ?? "Card Preview"}\n\n${card.title ?? "Value"}: {{var|${fieldName}: ${typeName}}}`
-}
-
-function resolvePreviewType(recordType?: string): string {
-  const normalized = recordType?.toLowerCase() ?? ""
-
-  if (normalized.includes("markdown")) return "AiralogyMarkdown"
-  if (normalized.includes("dna")) return "DNASequence"
-  if (normalized.includes("time")) return "CurrentTime"
-  if (normalized.includes("user")) return "UserName"
-  if (normalized.includes("python")) return "PyStr"
-  return "str"
 }
 
 function openPreview(card: VarCardGalleryCard) {
@@ -261,29 +73,15 @@ function openPreview(card: VarCardGalleryCard) {
 
 async function cloneCard(card: VarCardGalleryCard) {
   try {
-    const storeClone = storeApi.value?.cloneCard
-    if (typeof storeClone === "function") {
-      await storeClone(card.id)
-      await storeApi.value?.fetchCards?.()
-    } else {
-      await invoke("clone_var_card", { id: card.id })
-      localCards.value = await loadFallbackCards()
-    }
-
+    const clonedCard = await varCardStore.cloneCard(card.id)
+    await varCardStore.fetchCards()
     message.success(t("varCards.feedback.cloneSuccess", { title: card.title }))
-  } catch {
-    const clonedCard: VarCardGalleryCard = {
-      ...card,
-      id: `${card.id}-clone`,
-      title: `${card.title} Copy`,
-      namespace: "user",
-      readonly: false,
-      baseCardId: card.baseCardId ?? card.id,
-      recordType: card.recordType.replace("card:builtin/", "card:user/"),
+    if (clonedCard?.id) {
+      previewOpen.value = false
+      await router.push({ path: "/var-cards/studio", query: { id: clonedCard.id } })
     }
-
-    localCards.value = [clonedCard, ...cards.value.filter((existing) => existing.id !== clonedCard.id)]
-    message.success(t("varCards.feedback.cloneLocalOnly", { title: card.title }))
+  } catch {
+    message.error(String(varCardStore.error ?? t("varCards.studio.cloneUnavailable")))
   }
 }
 
@@ -377,11 +175,7 @@ function editCard(card: VarCardGalleryCard) {
         @preview="openPreview"
         @clone="cloneCard"
         @edit="editCard"
-      >
-        <template #preview="{ card }">
-          <InlineCardPreview :card="card" />
-        </template>
-      </VarCardGallery>
+      />
     </section>
 
     <VarCardPreviewDialog
@@ -540,19 +334,6 @@ function editCard(card: VarCardGalleryCard) {
 
 .market-gallery {
   min-height: 380px;
-}
-
-.market-inline-preview {
-  height: 100%;
-  overflow: hidden;
-}
-
-:deep(.market-inline-preview__surface) {
-  transform: scale(0.78);
-  transform-origin: top left;
-  width: 128%;
-  min-height: 220px;
-  pointer-events: none;
 }
 
 .market-state {
