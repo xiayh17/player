@@ -7,6 +7,8 @@ import { AimdRecorder, createEmptyProtocolRecordData } from "@airalogy/aimd-reco
 import "@airalogy/aimd-recorder/styles"
 import type { AimdProtocolRecordData } from "@airalogy/aimd-recorder"
 import { useWorkspaceStore } from "@/stores/workspace"
+import ProtocolNavigatorRail from "@/components/ProtocolNavigatorRail.vue"
+import { useProtocolNavigator } from "@/composables/useProtocolNavigator"
 import { invoke } from "@tauri-apps/api/core"
 
 const router = useRouter()
@@ -21,6 +23,8 @@ const files = ref<string[]>([])
 const selectedFile = ref<string | null>(null)
 const content = ref("")
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const protocolDocumentRef = ref<HTMLElement | null>(null)
 
 const protocolId = computed(() => route.query.id as string | undefined)
 
@@ -31,6 +35,21 @@ const protocol = computed(() =>
 const fileSelectOptions = computed(() =>
   files.value.map((f) => ({ label: f, value: f }))
 )
+
+const navigatorEnabled = computed(() => status.value === "ready")
+const {
+  anchors,
+  activeAnchorId,
+  hoveredAnchorId,
+  scrollToAnchor,
+  setHoveredAnchor,
+  clearHoveredAnchor,
+} = useProtocolNavigator({
+  scrollContainerRef,
+  contentRootRef: protocolDocumentRef,
+  content,
+  enabled: navigatorEnabled,
+})
 
 async function load() {
   if (!workspaceStore.current) {
@@ -155,8 +174,22 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
         <NButton @click="openEditor">{{ t("editor.title") }}</NButton>
       </header>
 
-      <main class="protocol-content">
-        <AimdRecorder v-model="record" :content="content" locale="en-US" />
+      <main ref="scrollContainerRef" class="protocol-content">
+        <div class="protocol-layout">
+          <div ref="protocolDocumentRef" class="protocol-document">
+            <AimdRecorder v-model="record" :content="content" locale="en-US" />
+          </div>
+          <ProtocolNavigatorRail
+            v-if="anchors.length > 0"
+            class="protocol-navigator"
+            :anchors="anchors"
+            :active-anchor-id="activeAnchorId"
+            :hovered-anchor-id="hoveredAnchorId"
+            @anchor-click="scrollToAnchor"
+            @anchor-hover="setHoveredAnchor"
+            @anchor-leave="clearHoveredAnchor"
+          />
+        </div>
       </main>
     </template>
   </div>
@@ -200,5 +233,35 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
 .protocol-content {
   flex: 1;
   overflow: auto;
+  padding: 16px 22px 24px;
+}
+
+.protocol-layout {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1040px) 34px;
+  justify-content: center;
+  align-items: start;
+  column-gap: 14px;
+}
+
+.protocol-document {
+  min-width: 0;
+}
+
+.protocol-navigator {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}
+
+@media (max-width: 1024px) {
+  .protocol-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .protocol-navigator {
+    display: none;
+  }
 }
 </style>
