@@ -1,4 +1,4 @@
-import type { AimdVarTypePresetOption } from "@airalogy/aimd-editor"
+import type { AimdVarTypePresetOption } from "@airalogy/aimd-editor/vue"
 import { storeToRefs } from "pinia"
 import { useVarCardStore } from "@/stores/varCards"
 
