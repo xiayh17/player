@@ -10,6 +10,7 @@ import { useEditorStore } from "@/stores/editor"
 import { createEditorVarTypePresets } from "@/features/var-cards/runtime/createEditorVarTypePresets"
 import { useVarCardStore } from "@/stores/varCards"
 import { invoke } from "@tauri-apps/api/core"
+import { resolveProtocolFilePath, resolveWorkspacePath } from "@/utils/workspacePaths"
 
 const router = useRouter()
 const route = useRoute()
@@ -21,7 +22,7 @@ const editorStore = useEditorStore()
 const varCardStore = useVarCardStore()
 const { cards: varCards } = storeToRefs(varCardStore)
 
-type Status = "loading" | "no-protocol" | "no-files" | "ready"
+type Status = "loading" | "no-protocol" | "no-files" | "ready" | "error"
 
 const status = ref<Status>("loading")
 const files = ref<string[]>([])
@@ -31,6 +32,7 @@ const saving = ref(false)
 const showNewFileModal = ref(false)
 const newFileName = ref("")
 const creatingFile = ref(false)
+const errorMessage = ref("")
 
 const protocolId = computed(() => route.query.id as string | undefined)
 
@@ -52,17 +54,22 @@ async function load() {
   }
 
   status.value = "loading"
+  errorMessage.value = ""
 
-  if (protocol.value.type === "file") {
-    const content = await invoke<string>("read_file", { path: protocol.value.path })
-    fileContent.value = content
-    editorStore.loadContent(content, protocol.value.path)
-    files.value = [protocol.value.path.split("/").pop()!]
-    selectedFile.value = files.value[0]
-    status.value = "ready"
-  } else {
+  try {
+    if (protocol.value.type === "file") {
+      const path = resolveProtocolFilePath(workspaceStore.current?.path, protocol.value)
+      const content = await invoke<string>("read_file", { path })
+      fileContent.value = content
+      editorStore.loadContent(content, path)
+      files.value = [protocol.value.path.split(/[\\/]/).pop()!]
+      selectedFile.value = files.value[0]
+      status.value = "ready"
+      return
+    }
+
     const entries: { name: string; is_dir: boolean }[] = await invoke("list_files", {
-      dir: protocol.value.path,
+      dir: resolveWorkspacePath(workspaceStore.current?.path, protocol.value.path),
     })
     files.value = entries.filter((f) => !f.is_dir && f.name.endsWith(".aimd")).map((f) => f.name)
 
@@ -73,15 +80,16 @@ async function load() {
 
     await openFile(files.value[0])
     status.value = "ready"
+  } catch (error) {
+    errorMessage.value = String(error)
+    status.value = "error"
+    message.error(errorMessage.value)
   }
 }
 
 async function openFile(filename: string) {
   if (!protocol.value) return
-  const path =
-    protocol.value.type === "file"
-      ? protocol.value.path
-      : `${protocol.value.path}/${filename}`
+  const path = resolveProtocolFilePath(workspaceStore.current?.path, protocol.value, filename)
   const content = await invoke<string>("read_file", { path })
   fileContent.value = content
   editorStore.loadContent(content, path)
@@ -115,7 +123,7 @@ async function createNewFile() {
 
   creatingFile.value = true
   try {
-    const path = `${protocol.value.path}/${name}`
+    const path = resolveProtocolFilePath(workspaceStore.current?.path, protocol.value, name)
     await invoke("write_file", { path, content: `# ${name.replace(".aimd", "")}\n\n` })
     files.value.push(name)
     showNewFileModal.value = false
@@ -177,6 +185,21 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
           <NButton type="primary" @click="showNewFileModal = true">
             {{ t("editor.newFile") }}
           </NButton>
+        </template>
+      </NEmpty>
+    </div>
+
+    <div v-else-if="status === 'error'" class="center-state">
+      <NEmpty :description="errorMessage || t('editor.saveFailed')">
+        <template #extra>
+          <NSpace :size="8">
+            <NButton @click="goBack">
+              {{ t("nav.projects") }}
+            </NButton>
+            <NButton type="primary" @click="load">
+              Retry
+            </NButton>
+          </NSpace>
         </template>
       </NEmpty>
     </div>
