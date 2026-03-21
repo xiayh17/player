@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { NCard, NCode, NEmpty, NTag } from "naive-ui"
+import { NCard, NEmpty, NTag } from "naive-ui"
 import VarCardPreviewSurface from "@/components/var-cards/VarCardPreviewSurface.vue"
 import type { VarCardManifest } from "@/features/var-cards/types"
 
@@ -130,7 +130,7 @@ const previewManifest = computed<VarCardManifest>(() => ({
 
     <NCard title="Compiled Snapshot" size="small">
       <NEmpty v-if="!formattedDemoValue" description="No demo value configured yet." />
-      <NCode v-else :code="formattedDemoValue" language="json" word-wrap />
+      <pre v-else class="compiled-snapshot-pre">{{ formattedDemoValue }}</pre>
     </NCard>
   </div>
 </template>
@@ -142,4 +142,16 @@ const previewManifest = computed<VarCardManifest>(() => ({
   gap: 16px;
 }
 
+.compiled-snapshot-pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--aimd-bg-page);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--aimd-text-primary);
+}
 </style>

@@ -164,11 +164,11 @@ function parseOptions(text: string) {
 }
 
 function cloneManifest(manifest: VarCardRecord): VarCardRecord {
-  return structuredClone(toRaw(manifest))
+  return JSON.parse(JSON.stringify(toRaw(manifest)))
 }
 
 function buildManifestFromDraft(nextDraft: Record<string, any>, baseManifest: VarCardRecord | null) {
-  const manifest: VarCardRecord = structuredClone(baseManifest ?? {
+  const manifest: VarCardRecord = JSON.parse(JSON.stringify(baseManifest ?? {
     id: "",
     namespace: "user",
     version: "1.0.0",
@@ -220,7 +220,7 @@ function buildManifestFromDraft(nextDraft: Record<string, any>, baseManifest: Va
       allowCopy: true,
       liveValue: false,
     },
-  })
+  }))
   const namespace = String(nextDraft.namespace || baseManifest?.namespace || "user")
   const isBuiltIn = namespace === "builtin"
 
