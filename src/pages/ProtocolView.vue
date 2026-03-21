@@ -10,7 +10,8 @@ import { useWorkspaceStore } from "@/stores/workspace"
 import ProtocolNavigatorRail from "@/components/ProtocolNavigatorRail.vue"
 import { useProtocolNavigator } from "@/composables/useProtocolNavigator"
 import { useVarCardRecorder } from "@/composables/useVarCardRecorder"
-import { invoke } from "@tauri-apps/api/core"
+import { convertFileSrc, invoke } from "@tauri-apps/api/core"
+import { dirname } from "@tauri-apps/api/path"
 
 const router = useRouter()
 const route = useRoute()
@@ -24,6 +25,7 @@ const files = ref<string[]>([])
 const selectedFile = ref<string | null>(null)
 const content = ref("")
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
+const currentFileDirectory = ref<string | null>(null)
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const protocolDocumentRef = ref<HTMLElement | null>(null)
 const { typePlugins: recorderTypePlugins } = useVarCardRecorder()
@@ -37,6 +39,74 @@ const protocol = computed(() =>
 const fileSelectOptions = computed(() =>
   files.value.map((f) => ({ label: f, value: f }))
 )
+
+function isAbsoluteFilesystemPath(path: string): boolean {
+  return path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)
+}
+
+function isExternalResource(path: string): boolean {
+  if (isAbsoluteFilesystemPath(path)) {
+    return false
+  }
+
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(path)
+}
+
+function toFileUrl(path: string): string {
+  const normalized = path.replace(/\\/g, "/")
+
+  if (/^[A-Za-z]:\//.test(normalized)) {
+    return `file:///${encodeURI(normalized)}`
+  }
+
+  if (normalized.startsWith("//")) {
+    return `file:${encodeURI(normalized)}`
+  }
+
+  if (normalized.startsWith("/")) {
+    return `file://${encodeURI(normalized)}`
+  }
+
+  return `file:///${encodeURI(normalized)}`
+}
+
+function resolveRelativeFilesystemPath(baseDir: string, relativePath: string): string {
+  const preferBackslash = baseDir.includes("\\")
+  const separator = preferBackslash ? "\\" : "/"
+  const baseUrl = new URL(
+    `${toFileUrl(baseDir).replace(/[\\/]+$/, "")}/`,
+  )
+  const resolvedUrl = new URL(relativePath.replace(/\\/g, "/"), baseUrl)
+  const decodedPath = decodeURIComponent(resolvedUrl.pathname)
+
+  if (/^\/[A-Za-z]:\//.test(decodedPath)) {
+    const windowsPath = decodedPath.slice(1)
+    return preferBackslash ? windowsPath.replace(/\//g, "\\") : windowsPath
+  }
+
+  return preferBackslash ? decodedPath.replace(/\//g, separator) : decodedPath
+}
+
+function resolveWorkspaceAsset(src: string): string | null {
+  const trimmed = src.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (isExternalResource(trimmed)) {
+    return trimmed
+  }
+
+  if (isAbsoluteFilesystemPath(trimmed)) {
+    return convertFileSrc(trimmed)
+  }
+
+  if (!currentFileDirectory.value) {
+    return trimmed
+  }
+
+  return convertFileSrc(resolveRelativeFilesystemPath(currentFileDirectory.value, trimmed))
+}
 
 const navigatorEnabled = computed(() => status.value === "ready")
 const {
@@ -66,10 +136,8 @@ async function load() {
   status.value = "loading"
 
   if (protocol.value.type === "file") {
-    // single-file protocol — read directly
-    content.value = await invoke<string>("read_file", { path: protocol.value.path })
-    files.value = [protocol.value.path.split("/").pop()!]
-    selectedFile.value = files.value[0]
+    files.value = [protocol.value.path.split(/[\\/]/).pop()!]
+    await openFile(files.value[0])
     status.value = "ready"
   } else {
     // folder protocol — list .aimd files inside
@@ -96,6 +164,7 @@ async function openFile(filename: string) {
       ? protocol.value.path
       : `${protocol.value.path}/${filename}`
   content.value = await invoke<string>("read_file", { path })
+  currentFileDirectory.value = await dirname(path)
   selectedFile.value = filename
 }
 
@@ -182,6 +251,7 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
             <AimdRecorder
               v-model="record"
               :content="content"
+              :resolve-file="resolveWorkspaceAsset"
               :type-plugins="recorderTypePlugins"
               locale="en-US"
             />
