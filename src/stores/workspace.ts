@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core"
 export interface ProtocolEntry {
   id: string
   name: string
+  title?: string
   type: "file" | "folder"
   path: string
 }
@@ -83,6 +84,18 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     }
   }
 
+  async function removeRecentWorkspace(path: string): Promise<void> {
+    try {
+      await invoke("remove_recent_workspace", { path })
+      recentWorkspaces.value = recentWorkspaces.value.filter((w) => w.path !== path)
+      if (current.value?.path === path) {
+        current.value = null
+      }
+    } catch (e) {
+      error.value = String(e)
+    }
+  }
+
   return {
     current,
     recentWorkspaces,
@@ -91,6 +104,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     openWorkspace,
     rescan,
     fetchRecentWorkspaces,
+    removeRecentWorkspace,
     setLastOpenedProtocol,
   }
 })

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from "vue"
 import { useRouter, useRoute } from "vue-router"
 import { useI18n } from "vue-i18n"
-import { NButton, NSpace, NSelect, NSpin, NEmpty, NDrawer, NDrawerContent } from "naive-ui"
+import { NButton, NSpace, NSelect, NSpin, NEmpty, NDrawer, NDrawerContent, useMessage } from "naive-ui"
 import { AimdRecorder, createEmptyProtocolRecordData } from "@airalogy/aimd-recorder"
 import "@airalogy/aimd-recorder/styles"
 import type { AimdProtocolRecordData } from "@airalogy/aimd-recorder"
@@ -13,13 +13,15 @@ import { useVarCardRecorder } from "@/composables/useVarCardRecorder"
 import { convertFileSrc, invoke } from "@tauri-apps/api/core"
 import { dirname } from "@tauri-apps/api/path"
 import { useMediaQuery } from "@vueuse/core"
+import { isAbsoluteFilesystemPath, resolveProtocolFilePath, resolveWorkspacePath } from "@/utils/workspacePaths"
 
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
+const message = useMessage()
 const workspaceStore = useWorkspaceStore()
 
-type Status = "loading" | "no-workspace" | "no-protocol" | "no-files" | "ready"
+type Status = "loading" | "no-workspace" | "no-protocol" | "no-files" | "ready" | "error"
 
 const status = ref<Status>("loading")
 const files = ref<string[]>([])
@@ -27,6 +29,7 @@ const selectedFile = ref<string | null>(null)
 const content = ref("")
 const record = ref<AimdProtocolRecordData>(createEmptyProtocolRecordData())
 const currentFileDirectory = ref<string | null>(null)
+const errorMessage = ref("")
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const protocolDocumentRef = ref<HTMLElement | null>(null)
 const { typePlugins: recorderTypePlugins } = useVarCardRecorder()
@@ -42,10 +45,6 @@ const protocol = computed(() =>
 const fileSelectOptions = computed(() =>
   files.value.map((f) => ({ label: f, value: f }))
 )
-
-function isAbsoluteFilesystemPath(path: string): boolean {
-  return path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)
-}
 
 function isExternalResource(path: string): boolean {
   if (isAbsoluteFilesystemPath(path)) {
@@ -137,15 +136,19 @@ async function load() {
   }
 
   status.value = "loading"
+  errorMessage.value = ""
 
-  if (protocol.value.type === "file") {
-    files.value = [protocol.value.path.split(/[\\/]/).pop()!]
-    await openFile(files.value[0])
-    status.value = "ready"
-  } else {
+  try {
+    if (protocol.value.type === "file") {
+      files.value = [protocol.value.path.split(/[\\/]/).pop()!]
+      await openFile(files.value[0])
+      status.value = "ready"
+      return
+    }
+
     // folder protocol — list .aimd files inside
     const entries: { name: string; is_dir: boolean }[] = await invoke("list_files", {
-      dir: protocol.value.path,
+      dir: resolveWorkspacePath(workspaceStore.current.path, protocol.value.path),
     })
     files.value = entries.filter((f) => !f.is_dir && f.name.endsWith(".aimd")).map((f) => f.name)
 
@@ -157,17 +160,18 @@ async function load() {
     const target = files.value[0]
     await openFile(target)
     status.value = "ready"
+  } catch (error) {
+    errorMessage.value = String(error)
+    status.value = "error"
+    message.error(errorMessage.value)
   }
 }
 
 async function openFile(filename: string) {
   if (!protocol.value) return
-  const path =
-    protocol.value.type === "file"
-      ? protocol.value.path
-      : `${protocol.value.path}/${filename}`
-  content.value = await invoke<string>("read_file", { path })
-  currentFileDirectory.value = await dirname(path)
+  const fullPath = resolveProtocolFilePath(workspaceStore.current?.path, protocol.value, filename)
+  content.value = await invoke<string>("read_file", { path: fullPath })
+  currentFileDirectory.value = await dirname(fullPath)
   selectedFile.value = filename
 }
 
@@ -200,6 +204,21 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
       </NEmpty>
     </div>
 
+    <div v-else-if="status === 'error'" class="center-state">
+      <NEmpty :description="errorMessage || t('editor.saveFailed')">
+        <template #extra>
+          <NSpace :size="8">
+            <NButton @click="router.push('/projects')">
+              {{ t("nav.projects") }}
+            </NButton>
+            <NButton type="primary" @click="load">
+              Retry
+            </NButton>
+          </NSpace>
+        </template>
+      </NEmpty>
+    </div>
+
     <template v-else-if="status === 'no-files'">
       <header class="protocol-header">
         <NSpace align="center" :size="8">
@@ -210,7 +229,7 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
               </svg>
             </template>
           </NButton>
-          <h2 class="protocol-title">{{ protocol?.name }}</h2>
+          <h2 class="protocol-title">{{ protocol?.title ?? protocol?.name }}</h2>
         </NSpace>
         <NButton type="primary" @click="openEditor">{{ t("editor.title") }}</NButton>
       </header>
@@ -233,7 +252,7 @@ watch(protocolId, (newId, oldId) => { if (newId !== oldId) load() })
               </svg>
             </template>
           </NButton>
-          <h2 class="protocol-title">{{ protocol?.name }}</h2>
+          <h2 class="protocol-title">{{ protocol?.title ?? protocol?.name }}</h2>
           <template v-if="files.length > 1">
             <span class="sep">/</span>
             <NSelect

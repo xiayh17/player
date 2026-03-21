@@ -12,6 +12,7 @@ const EXAMPLE_WORKSPACE_NAME: &str = "aimd-example-workspace";
 pub struct ProtocolEntry {
     pub id: String,
     pub name: String,
+    pub title: Option<String>,
     #[serde(rename = "type")]
     pub kind: ProtocolKind,
     pub path: String,
@@ -117,6 +118,22 @@ fn protocol_id(workspace: &Path, protocol_path: &Path) -> String {
         .replace(std::path::MAIN_SEPARATOR, "/")
 }
 
+/// Read the first line of an .aimd file and extract a `# Heading` title.
+fn extract_aimd_title(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    let first_line = content.lines().next()?.trim();
+    if first_line.starts_with("# ") {
+        let title = first_line[2..].trim();
+        if title.is_empty() {
+            None
+        } else {
+            Some(title.to_string())
+        }
+    } else {
+        None
+    }
+}
+
 fn scan_dir(workspace: &Path, dir: &Path, results: &mut Vec<ProtocolEntry>) {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -138,11 +155,13 @@ fn scan_dir(workspace: &Path, dir: &Path, results: &mut Vec<ProtocolEntry>) {
         if path.is_dir() {
             // folder protocol: contains protocol.json
             if path.join("protocol.json").exists() {
+                let rel_path = protocol_id(workspace, &path);
                 results.push(ProtocolEntry {
-                    id: protocol_id(workspace, &path),
+                    id: rel_path.clone(),
                     name: folder_protocol_name(&path),
+                    title: None,
                     kind: ProtocolKind::Folder,
-                    path: path.to_string_lossy().to_string(),
+                    path: rel_path,
                 });
                 // don't recurse into folder protocols
             } else {
@@ -154,11 +173,13 @@ fn scan_dir(workspace: &Path, dir: &Path, results: &mut Vec<ProtocolEntry>) {
                 .and_then(|s| s.to_str())
                 .unwrap_or(&name)
                 .to_string();
+            let rel_path = protocol_id(workspace, &path);
             results.push(ProtocolEntry {
-                id: protocol_id(workspace, &path),
+                id: rel_path.clone(),
                 name: stem,
+                title: extract_aimd_title(&path),
                 kind: ProtocolKind::File,
-                path: path.to_string_lossy().to_string(),
+                path: rel_path,
             });
         }
     }
@@ -178,6 +199,16 @@ fn folder_protocol_name(path: &Path) -> String {
         .and_then(|n| n.to_str())
         .unwrap_or("Untitled")
         .to_string()
+}
+
+#[tauri::command]
+pub async fn remove_recent_workspace(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(), String> {
+    let mut state = load_state(&app);
+    state.recent_workspaces.retain(|w| w.path != path);
+    save_state(&app, &state)
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────

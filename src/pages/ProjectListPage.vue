@@ -23,7 +23,11 @@ const protocols = computed<ProtocolEntry[]>(() => {
   const list = workspaceStore.current?.protocols ?? []
   if (!searchQuery.value) return list
   const q = searchQuery.value.toLowerCase()
-  return list.filter((p) => p.name.toLowerCase().includes(q))
+  return list.filter((p) =>
+    p.name.toLowerCase().includes(q)
+    || (p.title ?? "").toLowerCase().includes(q)
+    || p.path.toLowerCase().includes(q),
+  )
 })
 
 async function openWorkspaceDialog() {
@@ -75,7 +79,7 @@ function openProtocol(protocol: ProtocolEntry) {
         >
           <div class="project-card-header">
             <span class="protocol-type-icon">{{ protocol.type === "folder" ? "📁" : "📄" }}</span>
-            <h3 class="project-name">{{ protocol.name }}</h3>
+            <h3 class="project-name">{{ protocol.title ?? protocol.name }}</h3>
           </div>
           <p class="project-description">{{ protocol.path }}</p>
         </div>
