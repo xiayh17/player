@@ -51,6 +51,12 @@ async function openRecent(ws: RecentWorkspace) {
   if (info) router.push("/projects")
 }
 
+async function removeRecent(event: Event, ws: RecentWorkspace) {
+  event.stopPropagation()
+  await workspaceStore.removeRecentWorkspace(ws.path)
+  recentWorkspaces.value = recentWorkspaces.value.filter((w) => w.path !== ws.path)
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString()
 }
@@ -88,6 +94,17 @@ function formatDate(timestamp: number): string {
               <h3 class="recent-card-name">{{ ws.name }}</h3>
               <p class="recent-card-date">{{ formatDate(ws.lastOpenedAt) }}</p>
             </div>
+            <button
+              class="recent-card-remove"
+              :aria-label="`Remove ${ws.name}`"
+              @click="removeRecent($event, ws)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
         </div>
         <NEmpty v-else :description="t('welcome.noRecentFiles')" />
@@ -199,5 +216,30 @@ function formatDate(timestamp: number): string {
   font-size: 12px;
   color: var(--aimd-text-secondary);
   margin: 0;
+}
+
+.recent-card-remove {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--aimd-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.recent-card:hover .recent-card-remove {
+  opacity: 1;
+}
+
+.recent-card-remove:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--aimd-text-primary);
 }
 </style>
