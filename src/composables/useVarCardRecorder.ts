@@ -4,9 +4,16 @@ import { createRecorderTypePlugins } from "@/features/var-cards/runtime/createRe
 import { useVarCardStore } from "@/stores/varCards"
 import type { VarCardManifest } from "@/features/var-cards/types"
 
+function resolveRecorderManifests(
+  manifests: MaybeRefOrGetter<VarCardManifest[]> | undefined,
+  fallbackCards: VarCardManifest[],
+) {
+  return toValue(manifests) ?? fallbackCards
+}
+
 export function useVarCardRecorder(manifests?: MaybeRefOrGetter<VarCardManifest[]>) {
   const varCardStore = useVarCardStore()
   const { cards } = storeToRefs(varCardStore)
-  const resolvedManifests = computed(() => toValue(manifests) ?? cards.value)
+  const resolvedManifests = computed(() => resolveRecorderManifests(manifests, cards.value))
   return createRecorderTypePlugins(resolvedManifests)
 }
