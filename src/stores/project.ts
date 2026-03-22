@@ -1,17 +1,9 @@
 import { defineStore } from "pinia"
 import { ref } from "vue"
-import { invoke } from "@tauri-apps/api/core"
+import { tauriProjectGateway } from "@/shared/platform/projectGateway"
+import type { Project } from "@/shared/domain/workspace/projectTypes"
 
-export interface Project {
-  id: string
-  name: string
-  description: string
-  path: string
-  created_at: number
-  updated_at: number
-  tags: string[]
-  starred: boolean
-}
+export type { Project } from "@/shared/domain/workspace/projectTypes"
 
 export const useProjectStore = defineStore("project", () => {
   const projects = ref<Project[]>([])
@@ -23,7 +15,7 @@ export const useProjectStore = defineStore("project", () => {
     loading.value = true
     error.value = null
     try {
-      projects.value = await invoke<Project[]>("list_projects")
+      projects.value = await tauriProjectGateway.listProjects()
     } catch (e) {
       error.value = String(e)
       console.error("Failed to fetch projects:", e)
@@ -40,11 +32,7 @@ export const useProjectStore = defineStore("project", () => {
     loading.value = true
     error.value = null
     try {
-      const project = await invoke<Project>("create_project", {
-        name,
-        description: description || null,
-        path: path || null,
-      })
+      const project = await tauriProjectGateway.createProject(name, description, path)
       projects.value.unshift(project)
       return project
     } catch (e) {
@@ -60,7 +48,7 @@ export const useProjectStore = defineStore("project", () => {
     loading.value = true
     error.value = null
     try {
-      const project = await invoke<Project>("open_project", { id })
+      const project = await tauriProjectGateway.openProject(id)
       currentProject.value = project
       return project
     } catch (e) {
@@ -76,7 +64,7 @@ export const useProjectStore = defineStore("project", () => {
     loading.value = true
     error.value = null
     try {
-      await invoke("delete_project", { id })
+      await tauriProjectGateway.deleteProject(id)
       projects.value = projects.value.filter((p) => p.id !== id)
       if (currentProject.value?.id === id) {
         currentProject.value = null

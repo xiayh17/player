@@ -1,25 +1,22 @@
-import { invoke } from "@tauri-apps/api/core"
 import type { CloneVarCardPayload, VarCardManifest } from "./types"
+import { tauriVarCardGateway } from "@/shared/platform/var-cards"
 
 export async function listUserVarCards(): Promise<VarCardManifest[]> {
-  return invoke<VarCardManifest[]>("list_var_cards")
+  return tauriVarCardGateway.listUserVarCards()
 }
 
 export async function getUserVarCard(id: string): Promise<VarCardManifest> {
-  return invoke<VarCardManifest>("get_var_card", { id })
+  return tauriVarCardGateway.getUserVarCard(id)
 }
 
 export async function cloneVarCard(payload: CloneVarCardPayload): Promise<VarCardManifest> {
-  return invoke<VarCardManifest>("clone_var_card", {
-    sourceManifest: payload.sourceManifest,
-    newId: payload.newId,
-  })
+  return tauriVarCardGateway.cloneVarCard(payload)
 }
 
 export async function saveUserVarCard(manifest: VarCardManifest): Promise<VarCardManifest> {
-  return invoke<VarCardManifest>("save_var_card", { manifest })
+  return tauriVarCardGateway.saveUserVarCard(manifest)
 }
 
 export async function deleteUserVarCard(id: string): Promise<void> {
-  return invoke("delete_var_card", { id })
+  return tauriVarCardGateway.deleteUserVarCard(id)
 }

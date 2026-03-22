@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, ref, watch, type Ref } from "vue"
+import { nextTick, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from "vue"
 
 export type ProtocolAnchorKind = "section" | "step" | "check" | "table" | "quiz" | "callout"
 export type ProtocolAnchorStatus = "default" | "completed" | "warning" | "error"
@@ -17,7 +17,7 @@ export interface ProtocolAnchor {
 interface UseProtocolNavigatorOptions {
   scrollContainerRef: Ref<HTMLElement | null>
   contentRootRef: Ref<HTMLElement | null>
-  content: Ref<string>
+  content: Ref<string> | ComputedRef<string>
   enabled?: Ref<boolean>
 }
 
@@ -403,11 +403,12 @@ export function useProtocolNavigator(options: UseProtocolNavigatorOptions) {
     ([scrollContainer, contentRoot], _prev, onCleanup) => {
       if (!scrollContainer || !contentRoot) return
 
-      const resizeObserver = new ResizeObserver(() => {
+      const handleWindowResize = () => {
         scheduleRefresh()
-      })
-      resizeObserver.observe(scrollContainer)
-      resizeObserver.observe(contentRoot)
+      }
+      const handleContentLoad = () => {
+        scheduleRefresh()
+      }
 
       const mutationObserver = new MutationObserver(() => {
         scheduleRefresh()
@@ -418,10 +419,13 @@ export function useProtocolNavigator(options: UseProtocolNavigatorOptions) {
         characterData: true,
         attributes: true,
       })
+      window.addEventListener("resize", handleWindowResize)
+      contentRoot.addEventListener("load", handleContentLoad, true)
 
       onCleanup(() => {
-        resizeObserver.disconnect()
         mutationObserver.disconnect()
+        window.removeEventListener("resize", handleWindowResize)
+        contentRoot.removeEventListener("load", handleContentLoad, true)
       })
 
       void nextTick(() => {

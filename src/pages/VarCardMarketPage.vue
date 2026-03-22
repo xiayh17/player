@@ -1,100 +1,42 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import { useMessage } from "naive-ui"
 import { NButton, NButtonGroup, NEmpty, NInput, NSpin, NTag } from "naive-ui"
 import VarCardGallery from "@/components/var-cards/VarCardGallery.vue"
 import VarCardPreviewDialog from "@/components/var-cards/VarCardPreviewDialog.vue"
-import type { VarCardGalleryCard } from "@/components/var-cards/VarCardGalleryItem.vue"
 import { useVarCardStore } from "@/stores/varCards"
-
-type NamespaceFilter = "all" | "builtin" | "user"
+import { useVarCardMarket } from "@/shared/features/var-cards/useVarCardMarket"
 
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
 const varCardStore = useVarCardStore()
 
-const loading = ref(true)
-const searchQuery = ref("")
-const namespaceFilter = ref<NamespaceFilter>("all")
-const selectedCard = ref<VarCardGalleryCard | null>(null)
-const previewOpen = ref(false)
-
-const filterOptions = computed(() => [
-  { label: t("varCards.filters.all"), value: "all" },
-  { label: t("varCards.filters.builtin"), value: "builtin" },
-  { label: t("varCards.filters.user"), value: "user" },
-])
-
-const cards = computed<VarCardGalleryCard[]>(() => varCardStore.cards)
-
-const filteredCards = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-
-  return cards.value.filter((card) => {
-    const matchesNamespace =
-      namespaceFilter.value === "all" || card.namespace === namespaceFilter.value
-
-    if (!matchesNamespace) return false
-    if (!query) return true
-
-    return [
-      card.title,
-      card.description,
-      card.recordType,
-      ...card.tags,
-    ].some((value) => value.toLowerCase().includes(query))
-  })
+const {
+  loading,
+  searchQuery,
+  namespaceFilter,
+  selectedCard,
+  previewOpen,
+  filterOptions,
+  cards,
+  filteredCards,
+  builtInCount,
+  userCount,
+  setNamespaceFilter,
+  openPreview,
+  cloneCard,
+  editCard,
+} = useVarCardMarket({
+  store: varCardStore,
+  router,
+  message,
+  t,
 })
 
-const builtInCount = computed(() => cards.value.filter((card) => card.namespace === "builtin").length)
-const userCount = computed(() => cards.value.filter((card) => card.namespace === "user").length)
-
-onMounted(async () => {
-  await loadCards()
-})
-
-async function loadCards() {
-  loading.value = true
-
-  try {
-    await varCardStore.fetchCards()
-  } finally {
-    loading.value = false
-  }
-}
-
-function openPreview(card: VarCardGalleryCard) {
-  selectedCard.value = card
-  previewOpen.value = true
-}
-
-async function cloneCard(card: VarCardGalleryCard) {
-  try {
-    const clonedCard = await varCardStore.cloneCard(card.id)
-    await varCardStore.fetchCards()
-    message.success(t("varCards.feedback.cloneSuccess", { title: card.title }))
-    if (clonedCard?.id) {
-      previewOpen.value = false
-      await router.push({ path: "/var-cards/studio", query: { id: clonedCard.id } })
-    }
-  } catch {
-    message.error(String(varCardStore.error ?? t("varCards.studio.cloneUnavailable")))
-  }
-}
-
-function editCard(card: VarCardGalleryCard) {
-  const resolved = router.resolve({ path: "/var-cards/studio", query: { id: card.id } })
-
-  if (resolved.matched.length > 0) {
-    router.push(resolved)
-    return
-  }
-
-  message.info(t("varCards.feedback.studioUnavailable"))
-}
+const activeNamespaceFilter = computed(() => namespaceFilter.value)
 </script>
 
 <template>
@@ -146,8 +88,8 @@ function editCard(card: VarCardGalleryCard) {
         <NButton
           v-for="option in filterOptions"
           :key="option.value"
-          :type="namespaceFilter === option.value ? 'primary' : 'default'"
-          @click="namespaceFilter = option.value as NamespaceFilter"
+          :type="activeNamespaceFilter === option.value ? 'primary' : 'default'"
+          @click="setNamespaceFilter(option.value)"
         >
           {{ option.label }}
         </NButton>
